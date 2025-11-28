@@ -1,0 +1,81 @@
+{
+  "politicians": [
+    {
+      "id": 8974,
+      "name": "Narendra Modi",
+      "party": "Independent",
+      "state": "UTTAR PRADESH",
+      "constituency": "VARANASI",
+      "photoUrl": "https://myneta.info/images_candidate/mynetai_ews5LokSabha2024/c5661014fbd65ad919773c2b32250a1ca5afb5e5.jpg",
+      "age": 64,
+      "education": "BA",
+      "totalAssets": 0,
+      "criminalCases": 0,
+      "approvalRating": 56,
+      "source": "MyNeta.info",
+      "verified": true,
+      "status": "active",
+      "votes": {
+        "up": 7157,
+        "down": 267
+      }
+    },
+    {
+      "id": 9234,
+      "name": "Sanjeev Manhas",
+      "party": "Independent",
+      "state": "PUNJAB",
+      "constituency": "GURDASPUR",
+      "photoUrl": "https://myneta.info/images_candidate/mynetai_ews5LokSabha2024/b2c406cd1b9fc69d936048eb3537c51aa6f4821b.jpg",
+      "age": 40,
+      "education": "BA",
+      "totalAssets": 0,
+      "criminalCases": 0,
+      "approvalRating": 15,
+      "source": "MyNeta.info",
+      "verified": true,
+      "status": "active",
+      "votes": {
+        "up": 9413,
+        "down": 3658
+      }
+    }
+  ],
+  "votes": [],
+  "complaints": [],
+  "volunteers": [
+    {
+      "id": "v1",
+      "name": "Priya Sharma",
+      "state": "Delhi",
+      "rtisFiled": 12,
+      "points": 450,
+      "email": "priya@neta.in",
+      "phone": "+91-9876543210",
+      "claimsResolved": 8
+    },
+    {
+      "id": "v2",
+      "name": "Rajesh Kumar",
+      "state": "Maharashtra",
+      "rtisFiled": 8,
+      "points": 320,
+      "email": "rajesh@neta.in",
+      "phone": "+91-9876543211",
+      "claimsResolved": 5
+    },
+    {
+      "id": "v3",
+      "name": "Anjali Verma",
+      "state": "Karnataka",
+      "rtisFiled": 15,
+      "points": 550,
+      "email": "anjali@neta.in",
+      "phone": "+91-9876543212",
+      "claimsResolved": 10
+    }
+  ],
+  "rtiTasks": [],
+  "games": [],
+  "claims": []
+}

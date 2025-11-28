@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+npm-debug.log
+package-lock.json
+yarn.lock
+
+# Build output
+dist/
+build/
+.tsc-out/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+.replit.nix
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+.serverless/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temporary
+*.tmp
+.cache/
+.turbo/
