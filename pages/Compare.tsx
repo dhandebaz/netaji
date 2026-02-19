@@ -1,28 +1,46 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { getPoliticianById } from '../services/dataService';
-import { CheckCircle, AlertTriangle, ArrowLeft, Sparkles, BrainCircuit, Loader, BarChart3 } from 'lucide-react';
+import { fetchPoliticiansByIds } from '../services/dataService';
+import { CheckCircle, AlertTriangle, ArrowLeft, Sparkles, BrainCircuit, Loader, BarChart3, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateComparisonAnalysis, ComparisonAnalysis, isAIAvailable } from '../services/geminiService';
 import { Politician } from '../types';
+import ImageWithFallback from '../components/ImageWithFallback';
+import AddPoliticianSearch from '../components/compare/AddPoliticianSearch';
 
 const Compare: React.FC = () => {
-  const [searchParams] = useSearchParams();
-  const ids = searchParams.get('ids')?.split(',').map(Number) || [];
+  const [searchParams, setSearchParams] = useSearchParams();
+  const ids = useMemo(() => searchParams.get('ids')?.split(',').map(Number) || [], [searchParams]);
   
+  const [politicians, setPoliticians] = useState<Politician[]>([]);
+  const [loadingPoliticians, setLoadingPoliticians] = useState(true);
+
   const [analysis, setAnalysis] = useState<ComparisonAnalysis | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const politicians = useMemo(() => {
-    const result: Politician[] = [];
-    ids.forEach(id => {
-      const p = getPoliticianById(id);
-      if (p) result.push(p);
-    });
-    return result;
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoadingPoliticians(true);
+      if (ids.length > 0) {
+        const data = await fetchPoliticiansByIds(ids);
+        setPoliticians(data);
+      } else {
+        setPoliticians([]);
+      }
+      setLoadingPoliticians(false);
+    };
+    loadData();
   }, [ids]);
+
+  if (loadingPoliticians) {
+    return (
+        <div className="min-h-screen flex items-center justify-center text-slate-500 gap-2">
+            <Loader2 className="animate-spin" /> Loading Comparison...
+        </div>
+    );
+  }
 
   if (politicians.length === 0) {
     return (
@@ -42,11 +60,9 @@ const Compare: React.FC = () => {
   }
 
   const handleAnalyze = async () => {
-    if (!isAIAvailable()) {
-      setError('AI features require a Gemini API key. Please configure VITE_GEMINI_API_KEY.');
-      return;
-    }
-    setLoading(true);
+    // Check if AI is available (client-side or server-side)
+    // For now we try anyway, service will handle fallback
+    setLoadingAnalysis(true);
     setError(null);
     try {
         const result = await generateComparisonAnalysis(politicians);
@@ -55,7 +71,7 @@ const Compare: React.FC = () => {
         console.error(e);
         setError(e.message || 'Failed to generate analysis');
     } finally {
-        setLoading(false);
+        setLoadingAnalysis(false);
     }
   };
 
@@ -73,7 +89,7 @@ const Compare: React.FC = () => {
                </div>
            </div>
            
-           {!analysis && !loading && (
+           {!analysis && !loadingAnalysis && (
                <button 
                  onClick={handleAnalyze}
                  className="bg-gradient-to-r from-blue-600 to-violet-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-105 transition-all flex items-center gap-2"
@@ -85,7 +101,7 @@ const Compare: React.FC = () => {
 
         {/* AI Insight Dashboard */}
         <AnimatePresence>
-            {(loading || analysis) && (
+            {(loadingAnalysis || analysis) && (
                 <motion.div 
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
@@ -98,19 +114,28 @@ const Compare: React.FC = () => {
                         
                         <div className="flex items-center gap-3 mb-6">
                             <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                                {loading ? <Loader className="animate-spin" /> : <BrainCircuit />}
+                                {loadingAnalysis ? <Loader className="animate-spin" /> : <BrainCircuit />}
                             </div>
                             <h2 className="text-xl font-bold text-slate-900">
-                                {loading ? 'Generating Analysis...' : 'Executive Analysis Report'}
+                                {loadingAnalysis ? 'Generating Analysis...' : 'Executive Analysis Report'}
                             </h2>
                         </div>
 
-                        {loading ? (
+                        {loadingAnalysis ? (
                             <div className="space-y-4 animate-pulse">
                                 <div className="h-4 bg-slate-100 rounded w-3/4"></div>
                                 <div className="h-4 bg-slate-100 rounded w-1/2"></div>
                                 <div className="h-4 bg-slate-100 rounded w-5/6"></div>
                             </div>
+                        ) : error ? (
+                             <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-start gap-3 text-red-700">
+                                <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+                                <div>
+                                    <h3 className="font-bold text-sm">Analysis Failed</h3>
+                                    <p className="text-sm mt-1">{error}</p>
+                                    <button onClick={handleAnalyze} className="text-xs font-bold underline mt-2 hover:text-red-800">Try Again</button>
+                                </div>
+                             </div>
                         ) : analysis && (
                             <div className="grid md:grid-cols-3 gap-8">
                                 <div className="md:col-span-2 space-y-6">
@@ -119,6 +144,7 @@ const Compare: React.FC = () => {
                                         <p className="text-slate-700 leading-relaxed text-lg font-medium">{analysis.executiveSummary}</p>
                                     </div>
                                     
+                                    {analysis.keyDifferentiators.length > 0 && (
                                     <div>
                                         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Key Differentiators</h3>
                                         <div className="grid sm:grid-cols-2 gap-3">
@@ -130,15 +156,19 @@ const Compare: React.FC = () => {
                                             ))}
                                         </div>
                                     </div>
+                                    )}
 
+                                    {analysis.verdict && (
                                     <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
                                         <h3 className="text-blue-800 font-bold flex items-center gap-2 mb-1">
                                             <CheckCircle size={16} /> Verdict
                                         </h3>
                                         <p className="text-blue-700 text-sm">{analysis.verdict}</p>
                                     </div>
+                                    )}
                                 </div>
 
+                                {analysis.transparencyScores.length > 0 && (
                                 <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
                                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Transparency Scores</h3>
                                     <div className="space-y-5">
@@ -166,6 +196,7 @@ const Compare: React.FC = () => {
                                         })}
                                     </div>
                                 </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -181,10 +212,17 @@ const Compare: React.FC = () => {
                 <tr className="border-b border-slate-100">
                     <th className="w-48 p-6 bg-slate-50/50 text-left text-slate-400 font-bold text-xs uppercase tracking-wider">Attribute</th>
                     {politicians.map(p => (
-                    <th key={p.id} className="p-6 text-center w-64">
+                    <th key={p.id} className="p-6 text-center w-64 group/col relative">
+                        <button 
+                            onClick={() => handleRemovePolitician(p.id)}
+                            className="absolute top-2 right-2 p-1 bg-slate-100 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 opacity-0 group-hover/col:opacity-100 transition-all"
+                            title="Remove from comparison"
+                        >
+                            <X size={14} />
+                        </button>
                         <div className="flex flex-col items-center gap-3">
                         <div className="relative">
-                            <img src={p.photoUrl} alt={p.name} className="w-20 h-20 rounded-2xl object-cover border border-slate-100 shadow-sm" />
+                            <ImageWithFallback src={p.photoUrl} alt={p.name} className="w-20 h-20 rounded-2xl object-cover border border-slate-100 shadow-sm" />
                             <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center text-lg border border-slate-50">
                                 {p.partyLogo}
                             </div>

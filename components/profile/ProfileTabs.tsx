@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { FileText, Zap, TrendingUp, AlertTriangle, ShieldCheck, Megaphone, CheckCircle, Clock, Heart, Gavel, Link as LinkIcon } from 'lucide-react';
+import { FileText, Zap, TrendingUp, AlertTriangle, ShieldCheck, Megaphone, CheckCircle, Clock, Heart, Gavel, Link as LinkIcon, BrainCircuit } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Politician, NewsItem } from '../../types';
@@ -11,13 +11,14 @@ interface Props {
     setActiveTab: (tab: string) => void;
     politician: Politician;
     insights: PoliticianInsights | null;
+    loadingInsights: boolean;
     news: NewsItem[];
     loadingNews: boolean;
     myNetaUrl: string | null;
 }
 
 const ProfileTabs: React.FC<Props> = ({ 
-    activeTab, setActiveTab, politician, insights, news, loadingNews, myNetaUrl 
+    activeTab, setActiveTab, politician, insights, loadingInsights, news, loadingNews, myNetaUrl 
 }) => {
     return (
         <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 min-h-[600px] overflow-hidden">
@@ -86,7 +87,7 @@ const ProfileTabs: React.FC<Props> = ({
 
                 {activeTab === 'Overview' && (
                 <motion.div initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}} className="space-y-8">
-                    {!insights ? (
+                    {loadingInsights ? (
                         <div className="space-y-6">
                             <div className="animate-pulse space-y-3">
                                 <div className="h-4 bg-slate-100 rounded w-3/4"></div>
@@ -98,7 +99,7 @@ const ProfileTabs: React.FC<Props> = ({
                                     <div className="h-20 bg-slate-50 rounded-2xl animate-pulse"></div>
                             </div>
                         </div>
-                    ) : (
+                    ) : insights ? (
                         <>
                             <div className="bg-gradient-to-br from-blue-50 to-violet-50 p-6 rounded-3xl border border-blue-100">
                                 <h3 className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-2 flex items-center gap-1"><FileText size={14}/> Executive Summary</h3>
@@ -119,6 +120,11 @@ const ProfileTabs: React.FC<Props> = ({
                                 </div>
                             </div>
                         </>
+                    ) : (
+                        <div className="p-8 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-center">
+                            <BrainCircuit className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                            <p className="text-slate-500 font-medium">AI Insights are currently unavailable.</p>
+                        </div>
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

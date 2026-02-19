@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import StateLocator from '../components/home/StateLocator';
 import ReverseLeaderboard from '../components/home/ReverseLeaderboard';
-import { getAllPoliticians, getPoliticiansByState, dataSyncEvents } from '../services/dataService';
+import { getAllPoliticians, dataSyncEvents } from '../services/dataService';
+import { getPoliticians } from '../services/apiService';
 import { Politician } from '../types';
 
 const Home: React.FC = () => {
@@ -10,30 +11,74 @@ const Home: React.FC = () => {
   const [selectedState, setSelectedState] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Initial load
   useEffect(() => {
-    setIsLoading(true);
-    const allPoliticians = getAllPoliticians();
-    setPoliticians(allPoliticians);
-    setIsLoading(false);
+    const loadInitialData = async () => {
+      setIsLoading(true);
+      try {
+        const initialData = getAllPoliticians();
+        if (initialData.length > 0) {
+            setPoliticians(initialData);
+        } else {
+            // Fallback to API if local is empty
+            const res = await getPoliticians({ limit: 50 }); // Fetch top 50
+            const data = Array.isArray(res) ? res : (res.data || []);
+            setPoliticians(data);
+        }
+      } catch (e) {
+        console.error('Failed to load initial data:', e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadInitialData();
     
     // Listen for real-time data updates from admin panel
     const unsubscribe = dataSyncEvents.on('politiciansUpdated', (updatedPoliticians: Politician[]) => {
-      console.log('[Home] Politicians updated from admin panel:', updatedPoliticians.length);
-      setPoliticians(updatedPoliticians);
+      // If we are filtering by state, we might need to re-fetch or filter this list
+      // For simplicity, we update the local state if no specific state is selected or merge logic is complex
+      // Here we just update if no state selected, or if we want to keep local sync
+      if (!selectedState) {
+          setPoliticians(updatedPoliticians);
+      }
     });
     
     return () => {
       // Cleanup: Remove event listener
-      window.removeEventListener('neta:politiciansUpdated', unsubscribe as any);
+      // @ts-ignore
+      if (dataSyncEvents.off) dataSyncEvents.off('politiciansUpdated', unsubscribe);
     };
   }, []);
 
-  const displayedPoliticians = useMemo(() => {
+  // Fetch when state changes
+  useEffect(() => {
+    const fetchByState = async () => {
+        if (!selectedState) return;
+        
+        setIsLoading(true);
+        try {
+            const res = await getPoliticians({ state: selectedState });
+            const data = Array.isArray(res) ? res : (res.data || []);
+            setPoliticians(data);
+        } catch (e) {
+            console.error(`Failed to fetch politicians for ${selectedState}:`, e);
+            // Fallback to local filtering
+            const all = getAllPoliticians();
+            setPoliticians(all.filter(p => p.state === selectedState));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     if (selectedState) {
-      return getPoliticiansByState(selectedState);
+        fetchByState();
+    } else {
+        // Reset to all (or initial cached)
+        setPoliticians(getAllPoliticians());
     }
-    return politicians;
-  }, [politicians, selectedState]);
+  }, [selectedState]);
+
+  const displayedPoliticians = politicians; // We now fetch exactly what we need
 
   const handleStateSelect = (state: string) => {
     setSelectedState(state);

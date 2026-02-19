@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Users, Vote, ShieldCheck } from 'lucide-react';
-import { getAllPoliticians, addPolitician, deletePolitician, getClaims, updateClaimStatus, updatePolitician } from '../../services/dataService';
+import { getAllPoliticians, addPolitician, deletePolitician, getClaims, updateClaimStatus, updatePolitician, dataSyncEvents } from '../../services/dataService';
+import { getPoliticians as getPoliticiansApi } from '../../services/apiService';
+import { useDebounce } from '../../hooks/useDebounce';
 import { ClaimRequest, Politician } from '../../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../../context/ToastContext';
@@ -18,14 +20,54 @@ const AdminPoliticians: React.FC = () => {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const { addToast } = useToast();
 
-    const refreshData = () => {
-        setPoliticians(getAllPoliticians());
-        setClaims(getClaims());
+    const [searchQuery, setSearchQuery] = useState('');
+    const debouncedSearch = useDebounce(searchQuery, 500);
+    const [loading, setLoading] = useState(false);
+
+    const refreshData = async () => {
+        setLoading(true);
+        try {
+            // Fetch claims locally (for now)
+            setClaims(getClaims());
+
+            // Determine role based on active tab
+            const role = activeTab === 'candidates' ? 'candidate' : activeTab === 'elected' ? 'elected' : undefined;
+
+            // Fetch politicians from backend
+            const res = await getPoliticiansApi({ 
+                search: debouncedSearch,
+                role: role
+            });
+            const data = Array.isArray(res) ? res : (res.data || []);
+            setPoliticians(data);
+        } catch (error) {
+            console.error('Failed to fetch politicians:', error);
+            // Fallback to local data on error
+            setPoliticians(getAllPoliticians());
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
         refreshData();
-    }, []);
+    }, [debouncedSearch]);
+
+    useEffect(() => {
+        // Subscribe to updates
+        const handleUpdate = () => refreshData();
+        
+        dataSyncEvents.on('politiciansUpdated', handleUpdate);
+        dataSyncEvents.on('claimsUpdated', handleUpdate);
+        
+        return () => {
+            // @ts-ignore
+            if (dataSyncEvents.off) {
+                dataSyncEvents.off('politiciansUpdated', handleUpdate);
+                dataSyncEvents.off('claimsUpdated', handleUpdate);
+            }
+        };
+    }, [debouncedSearch]);
 
     const totalPoliticians = politicians.length;
     const verifiedProfiles = politicians.filter(p => p.verified).length;
@@ -50,14 +92,15 @@ const AdminPoliticians: React.FC = () => {
     const handleAddPolitician = (newPolitician: Partial<Politician>) => {
         const added = addPolitician(newPolitician);
         addToast(`${added.name} added to registry`, 'success');
-        refreshData();
+        // refreshData will be triggered by event, but we call it here to be sure
+        setTimeout(refreshData, 500); // Small delay to allow backend sync (optimistic)
     };
 
     const handleDeletePolitician = (id: number) => {
         if (confirm('Are you sure you want to delete this profile?')) {
             deletePolitician(id);
             addToast('Profile removed', 'info');
-            refreshData();
+            setTimeout(refreshData, 500);
         }
     }
 
@@ -131,6 +174,9 @@ const AdminPoliticians: React.FC = () => {
                                 data={politicians} 
                                 onAdd={() => setIsAddModalOpen(true)} 
                                 onDelete={handleDeletePolitician}
+                                searchQuery={searchQuery}
+                                onSearchChange={setSearchQuery}
+                                loading={loading}
                             />
                         </motion.div>
                     )}
@@ -145,9 +191,12 @@ const AdminPoliticians: React.FC = () => {
                         >
                             <PoliticianTable 
                                 type="candidate" 
-                                data={[]} // Using empty array for demo distinction
+                                data={politicians} 
                                 onAdd={() => setIsAddModalOpen(true)} 
                                 onDelete={handleDeletePolitician}
+                                searchQuery={searchQuery}
+                                onSearchChange={setSearchQuery}
+                                loading={loading}
                             />
                         </motion.div>
                     )}

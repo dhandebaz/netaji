@@ -20,6 +20,14 @@ const ImageWithFallback: React.FC<Props> = ({ src, alt, className, fallbackText 
       .toUpperCase();
   };
 
+  const getProxiedUrl = (url?: string) => {
+    if (!url) return undefined;
+    if (url.startsWith('http') && !url.includes(window.location.origin)) {
+      return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+    }
+    return url;
+  };
+
   if (!src || error) {
     return (
       <div className={`flex items-center justify-center bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)] font-bold text-2xl ${className}`}>
@@ -30,7 +38,7 @@ const ImageWithFallback: React.FC<Props> = ({ src, alt, className, fallbackText 
 
   return (
     <img 
-      src={src} 
+      src={getProxiedUrl(src)} 
       alt={alt} 
       className={className}
       onError={() => setError(true)}

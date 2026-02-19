@@ -27,6 +27,7 @@ import RTIGuidelines from './pages/RTIGuidelines';
 import ElectionAnalytics from './pages/ElectionAnalytics';
 import PublicComplaints from './pages/PublicComplaints';
 import GamesArcade from './pages/GamesArcade';
+import GamePlayer from './pages/GamePlayer';
 import { AnimatePresence } from 'framer-motion';
 
 initializeData();
@@ -70,6 +71,7 @@ const AnimatedRoutes = () => {
         <Route path="/election-analytics" element={<ElectionAnalytics />} />
         <Route path="/complaints" element={<PublicComplaints />} />
         <Route path="/games" element={<GamesArcade />} />
+        <Route path="/games/play/:id" element={<GamePlayer />} />
       </Routes>
     </AnimatePresence>
   );

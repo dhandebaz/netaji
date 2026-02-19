@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { Users, FileText, CheckCircle, Activity, ArrowUpRight, Clock, MapPin, AlertTriangle, Zap, Link, Box, MessageSquare } from 'lucide-react';
+import { Users, FileText, CheckCircle, Activity, ArrowUpRight, Clock, MapPin, AlertTriangle, Zap, Link, Box, MessageSquare, Database } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { getAllRTITasks, getAllComplaints } from '../../services/dataService';
+import { getAllRTITasks, getAllComplaints, dataSyncEvents } from '../../services/dataService';
+import { getAdminStats } from '../../services/apiService';
 import { motion } from 'framer-motion';
 
 const AdminDashboard: React.FC = () => {
@@ -10,42 +11,69 @@ const AdminDashboard: React.FC = () => {
   const [ledgerHeight, setLedgerHeight] = useState(14205);
   const [complaints, setComplaints] = useState(getAllComplaints());
   const [liveLog, setLiveLog] = useState<string[]>([]);
+  const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
+      // Fetch initial backend stats
+      const fetchStats = async () => {
+          try {
+              const token = localStorage.getItem('neta_token');
+              if (token) {
+                  const data = await getAdminStats(token);
+                  setStats(data);
+              }
+          } catch (e) {
+              console.error('Failed to fetch admin stats', e);
+          }
+      };
+      fetchStats();
+
+      // Listen for real-time updates
+      const handleRTIUpdate = () => {
+        setRtiTasks(getAllRTITasks());
+        addLog("RTI Tasks updated from blockchain");
+      };
+
+      const handleComplaintsUpdate = () => {
+        setComplaints(getAllComplaints());
+        addLog("New citizen complaint received");
+      };
+
+      const handlePoliticiansUpdate = (data: any) => {
+         addLog(`Politician registry synced (${data.length} records)`);
+      };
+
+      dataSyncEvents.on('rtiTasksUpdated', handleRTIUpdate);
+      dataSyncEvents.on('complaintsUpdated', handleComplaintsUpdate);
+      dataSyncEvents.on('politiciansUpdated', handlePoliticiansUpdate);
+      dataSyncEvents.on('claimsUpdated', () => addLog("New verification claim received"));
+
       const interval = setInterval(() => {
-          setLedgerHeight(prev => prev + Math.floor(Math.random() * 5));
-          setComplaints(getAllComplaints());
-          setRtiTasks(getAllRTITasks());
-      }, 2000);
-      return () => clearInterval(interval);
+          setLedgerHeight(prev => prev + 1);
+          // Keep a heartbeat log occasionally
+          if (Math.random() > 0.8) {
+             addLog("System heartbeat: All nodes operational");
+          }
+      }, 5000);
+
+      return () => {
+        clearInterval(interval);
+        // @ts-ignore
+        if (dataSyncEvents.off) {
+            dataSyncEvents.off('rtiTasksUpdated', handleRTIUpdate);
+            dataSyncEvents.off('complaintsUpdated', handleComplaintsUpdate);
+            dataSyncEvents.off('politiciansUpdated', handlePoliticiansUpdate);
+        }
+      };
   }, []);
 
-  // Derived Metrics
-  const pendingRTI = rtiTasks.filter(t => t.status === 'generated' || t.status === 'claimed').length;
-  const activeComplaints = complaints.filter(c => c.status === 'pending' || c.status === 'investigating').length;
+  const addLog = (message: string) => {
+      const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLiveLog(prev => [`[${time}] ${message}`, ...prev].slice(0, 8));
+  };
   
-  // Mock Live Feed
-  useEffect(() => {
-      const actions = [
-          "User 'Amit' claimed RTI-1024",
-          "Vote #8892 verified on Blockchain",
-          "New complaint filed in Varanasi: 'Pot holes'",
-          "System alert: High traffic from Maharashtra region",
-          "Prediction Engine updated: BJP +2 seats",
-          "Data Pipeline: RSS Sync complete (124 items)"
-      ];
-      
-      const interval = setInterval(() => {
-          const newItem = actions[Math.floor(Math.random() * actions.length)];
-          const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-          setLiveLog(prev => [`[${time}] ${newItem}`, ...prev].slice(0, 8));
-      }, 2500);
-
-      return () => clearInterval(interval);
-  }, []);
-  
-  // Chart Data (Mock)
-  const trafficData = [
+  // Chart Data
+  const trafficData = stats?.trafficData || [
     { name: '00:00', users: 400, votes: 24 },
     { name: '04:00', users: 200, votes: 13 },
     { name: '08:00', users: 2000, votes: 450 },
@@ -54,6 +82,8 @@ const AdminDashboard: React.FC = () => {
     { name: '20:00', users: 1390, votes: 310 },
     { name: '23:59', users: 690, votes: 120 },
   ];
+
+  const activeComplaints = stats ? stats.pendingComplaints : complaints.filter(c => c.status === 'pending').length;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -73,7 +103,7 @@ const AdminDashboard: React.FC = () => {
         <StatCard 
           icon={<Users className="text-blue-600" size={24} />} 
           label="Citizen Users" 
-          value="14,203" 
+          value={stats ? stats.users.toLocaleString() : "14,203"} 
           subValue="+128 today"
           color="blue"
         />
@@ -94,10 +124,22 @@ const AdminDashboard: React.FC = () => {
         />
         <StatCard 
           icon={<Zap className="text-purple-600" size={24} />} 
-          label="Prediction Conf." 
-          value="89%" 
-          subValue="AI Model: v3.2"
+          label="Total Politicians" 
+          value={stats ? stats.politicians.toLocaleString() : "..."} 
+          subValue="Monitored Profiles"
           color="purple"
+        />
+        <StatCard
+          icon={<Database className={stats?.db?.connected ? 'text-emerald-600' : 'text-orange-600'} size={24} />}
+          label="DB Status"
+          value={stats?.db?.connected ? 'Online' : 'Offline'}
+          subValue={
+            stats?.db?.connected
+              ? `${(stats.db.politicians ?? 0).toLocaleString()} politicians`
+              : 'File storage active'
+          }
+          color={stats?.db?.connected ? 'emerald' : 'orange'}
+          alert={!stats?.db?.connected}
         />
       </div>
 

@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 import { Mic, MicOff, X, Activity, Volume2, Radio } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { MOCK_POLITICIANS } from '../constants';
+import { getAllPoliticians } from '../services/dataService';
 
 interface Props {
   onClose: () => void;
@@ -31,7 +31,8 @@ export const LiveVoiceMode: React.FC<Props> = ({ onClose }) => {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
         // Context for the AI
-        const contextData = MOCK_POLITICIANS.map(p => ({
+        const politicians = getAllPoliticians();
+        const contextData = politicians.map(p => ({
             name: p.name,
             party: p.party,
             state: p.state,
@@ -70,7 +71,7 @@ export const LiveVoiceMode: React.FC<Props> = ({ onClose }) => {
             onopen: async () => {
               if (!isActive) return;
               setStatus('connected');
-              console.log("[Live Voice] Session Opened");
+              console.info("[Live Voice] Session Opened");
 
               // Start Microphone
               try {
@@ -144,7 +145,7 @@ export const LiveVoiceMode: React.FC<Props> = ({ onClose }) => {
                 }
             },
             onclose: () => {
-                console.log("[Live Voice] Closed");
+                console.info("[Live Voice] Closed");
             },
             onerror: (e) => {
                 console.error("[Live Voice] Error", e);

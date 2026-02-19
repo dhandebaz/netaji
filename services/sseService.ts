@@ -1,181 +1,120 @@
-const API_BASE = '/api';
 
-type SSEEventHandler = (data: any) => void;
+import { dataSyncEvents } from './dataService';
 
-interface SSEEventHandlers {
-  [key: string]: Set<SSEEventHandler>;
-}
+let eventSource: EventSource | null = null;
+let reconnectTimer: NodeJS.Timeout | null = null;
+const RECONNECT_DELAY = 5000;
+const MAX_RETRIES = 5;
+let retryCount = 0;
 
-class SSEService {
-  private eventSource: EventSource | null = null;
-  private handlers: SSEEventHandlers = {};
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
-  private reconnectDelay = 1000;
-  private isConnecting = false;
-  private heartbeatTimeout: ReturnType<typeof setTimeout> | null = null;
+type SSECallback = (data: any) => void;
+const listeners: Map<string, Set<SSECallback>> = new Map();
 
-  connect(): void {
-    if (this.eventSource || this.isConnecting) {
-      return;
-    }
+export const connectSSE = () => {
+  if (eventSource?.readyState === EventSource.OPEN) return;
 
-    this.isConnecting = true;
-    console.log('[SSE] Connecting to server...');
-
-    try {
-      this.eventSource = new EventSource(`${API_BASE}/sse`);
-
-      this.eventSource.onopen = () => {
-        console.log('[SSE] Connected successfully');
-        this.reconnectAttempts = 0;
-        this.isConnecting = false;
-        this.startHeartbeatMonitor();
-      };
-
-      this.eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          this.handleEvent(data);
-        } catch (error) {
-          console.error('[SSE] Failed to parse message:', error);
-        }
-      };
-
-      this.eventSource.onerror = (error) => {
-        console.error('[SSE] Connection error:', error);
-        this.handleDisconnect();
-      };
-
-    } catch (error) {
-      console.error('[SSE] Failed to create EventSource:', error);
-      this.isConnecting = false;
-      this.scheduleReconnect();
-    }
-  }
-
-  private handleEvent(data: any): void {
-    const { type } = data;
+  const connect = () => {
+    const sseUrl = '/api/sse';
     
-    if (type === 'heartbeat') {
-      this.resetHeartbeatMonitor();
-      return;
-    }
+    console.log('[SSE] Connecting to:', sseUrl);
+    eventSource = new EventSource(sseUrl);
 
-    if (type === 'connected') {
-      console.log('[SSE] Server confirmed connection');
-      return;
-    }
-
-    console.log(`[SSE] Received event: ${type}`, data);
-
-    const typeHandlers = this.handlers[type];
-    if (typeHandlers) {
-      typeHandlers.forEach(handler => {
-        try {
-          handler(data.data);
-        } catch (error) {
-          console.error(`[SSE] Handler error for ${type}:`, error);
-        }
-      });
-    }
-
-    const allHandlers = this.handlers['*'];
-    if (allHandlers) {
-      allHandlers.forEach(handler => {
-        try {
-          handler(data);
-        } catch (error) {
-          console.error('[SSE] Wildcard handler error:', error);
-        }
-      });
-    }
-  }
-
-  private handleDisconnect(): void {
-    this.isConnecting = false;
-    this.stopHeartbeatMonitor();
-    
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-
-    this.scheduleReconnect();
-  }
-
-  private scheduleReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('[SSE] Max reconnection attempts reached');
-      return;
-    }
-
-    const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts), 30000);
-    console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
-    
-    this.reconnectAttempts++;
-    setTimeout(() => this.connect(), delay);
-  }
-
-  private startHeartbeatMonitor(): void {
-    this.resetHeartbeatMonitor();
-  }
-
-  private resetHeartbeatMonitor(): void {
-    if (this.heartbeatTimeout) {
-      clearTimeout(this.heartbeatTimeout);
-    }
-    this.heartbeatTimeout = setTimeout(() => {
-      console.warn('[SSE] No heartbeat received, reconnecting...');
-      this.handleDisconnect();
-    }, 45000);
-  }
-
-  private stopHeartbeatMonitor(): void {
-    if (this.heartbeatTimeout) {
-      clearTimeout(this.heartbeatTimeout);
-      this.heartbeatTimeout = null;
-    }
-  }
-
-  on(eventType: string, handler: SSEEventHandler): () => void {
-    if (!this.handlers[eventType]) {
-      this.handlers[eventType] = new Set();
-    }
-    this.handlers[eventType].add(handler);
-
-    return () => {
-      this.handlers[eventType]?.delete(handler);
+    eventSource.onopen = () => {
+      console.log('[SSE] Connected');
+      retryCount = 0;
+      notifyListeners('connected', { message: 'Connected' });
     };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        // console.log('[SSE] Received:', payload.type); // Verbose logging
+
+        notifyListeners(payload.type, payload);
+        notifyListeners('*', payload);
+
+        // Handle specific system-wide syncs
+        switch (payload.type) {
+          case 'politician:added':
+          case 'politician:updated':
+          case 'politician:deleted':
+          case 'politicians:refreshed':
+             import('./dataService').then(({ syncPoliticiansWithBackend }) => {
+                 syncPoliticiansWithBackend();
+             });
+             break;
+          case 'game:played':
+          case 'game:updated':
+          case 'game:deleted':
+          case 'gamesUpdated':
+             import('./dataService').then(({ syncGamesWithBackend }) => {
+                 syncGamesWithBackend();
+             });
+             break;
+        }
+        
+        // Also re-emit as a local event via dataService for legacy support
+        if (payload.type && payload.data) {
+             dataSyncEvents.emit(payload.type, payload.data);
+        }
+
+      } catch (e) {
+        console.error('[SSE] Error parsing message:', e);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('[SSE] Connection error:', err);
+      eventSource?.close();
+      eventSource = null;
+      
+      if (retryCount < MAX_RETRIES) {
+        retryCount++;
+        console.info(`[SSE] Reconnecting in ${RECONNECT_DELAY}ms (Attempt ${retryCount}/${MAX_RETRIES})...`);
+        reconnectTimer = setTimeout(connect, RECONNECT_DELAY);
+      } else {
+        console.error('[SSE] Max retries reached. Giving up.');
+      }
+    };
+  };
+
+  connect();
+};
+
+export const closeSSE = () => {
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
   }
-
-  off(eventType: string, handler?: SSEEventHandler): void {
-    if (!handler) {
-      delete this.handlers[eventType];
-    } else {
-      this.handlers[eventType]?.delete(handler);
-    }
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
   }
+};
 
-  disconnect(): void {
-    this.stopHeartbeatMonitor();
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-    this.handlers = {};
-    console.log('[SSE] Disconnected');
+export const onSSEEvent = (event: string, callback: SSECallback) => {
+  if (!listeners.has(event)) {
+    listeners.set(event, new Set());
   }
+  listeners.get(event)!.add(callback);
+  
+  return () => {
+    listeners.get(event)?.delete(callback);
+  };
+};
 
-  isConnected(): boolean {
-    return this.eventSource?.readyState === EventSource.OPEN;
+const notifyListeners = (event: string, data: any) => {
+  if (listeners.has(event)) {
+    listeners.get(event)!.forEach(cb => cb(data));
   }
-}
+};
 
-export const sseService = new SSEService();
+export const sseService = {
+  connect: connectSSE,
+  close: closeSSE,
+  on: onSSEEvent
+};
 
-export const connectSSE = () => sseService.connect();
-export const disconnectSSE = () => sseService.disconnect();
-export const onSSEEvent = (type: string, handler: SSEEventHandler) => sseService.on(type, handler);
-export const offSSEEvent = (type: string, handler?: SSEEventHandler) => sseService.off(type, handler);
-export const isSSEConnected = () => sseService.isConnected();
+// Legacy support for my previous edit (if any file imported it)
+export const initSSEService = connectSSE;
+export const closeSSEService = closeSSE;

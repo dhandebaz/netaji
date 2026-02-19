@@ -2,6 +2,18 @@ import { parseApiError, AppError, ERROR_CODES } from './errorHandler';
 
 const API_BASE = '/api';
 
+function getTenant() {
+  try {
+    const host = typeof window !== 'undefined' ? window.location.host : '';
+    if (!host || host.includes('localhost')) return '';
+    const parts = host.split('.');
+    if (parts.length > 2) return parts[0];
+    return '';
+  } catch {
+    return '';
+  }
+}
+
 interface ApiResponse<T = any> {
   data?: T;
   error?: string;
@@ -34,6 +46,7 @@ async function apiCall<T = any>(
     headers: { 
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      ...(getTenant() ? { 'X-Tenant': getTenant() } : {}),
       ...(token ? { 'Authorization': `Bearer ${token}` } : {})
     },
   };
@@ -88,13 +101,16 @@ async function safeApiCall<T = any>(
   }
 }
 
-export const getPoliticians = (params?: { state?: string; party?: string; search?: string; limit?: number; offset?: number }) => {
+export const getPoliticians = (params?: { state?: string; party?: string; search?: string; limit?: number; offset?: number; sort?: string; role?: 'elected' | 'candidate'; ids?: number[] }) => {
   const queryParams = new URLSearchParams();
   if (params?.state) queryParams.set('state', params.state);
   if (params?.party) queryParams.set('party', params.party);
   if (params?.search) queryParams.set('search', params.search);
   if (params?.limit) queryParams.set('limit', String(params.limit));
   if (params?.offset) queryParams.set('offset', String(params.offset));
+  if (params?.sort) queryParams.set('sort', params.sort);
+  if (params?.role) queryParams.set('role', params.role);
+  if (params?.ids && params.ids.length > 0) queryParams.set('ids', params.ids.join(','));
   const query = queryParams.toString();
   return apiCall('GET', `/politicians${query ? `?${query}` : ''}`);
 };
@@ -104,6 +120,9 @@ export const getPolitician = (idOrSlug: string | number) =>
 
 export const addPolitician = (data: any) => 
   apiCall('POST', '/politicians', data);
+
+export const scrapePolitician = (url: string) => 
+  apiCall('POST', '/politicians/scrape', { url });
 
 export const updatePolitician = (id: number, data: any) => 
   apiCall('PUT', `/politicians/${id}`, data);

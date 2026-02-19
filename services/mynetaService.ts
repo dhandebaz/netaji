@@ -1,5 +1,5 @@
 import { Politician } from '../types';
-import { scrapePolitician } from './scraperService';
+import { scrapePolitician } from './apiService';
 
 // Real politician data from MyNeta.info (2024 Lok Sabha) - Expanded List
 const REAL_POLITICIANS = [
@@ -34,31 +34,38 @@ export const fetchRealPoliticiansFromMyNeta = async (): Promise<Politician[]> =>
   
   for (const { candidateId, electionSlug, name: overrideName } of REAL_POLITICIANS) {
     try {
-      const scrapedData = await scrapePolitician(electionSlug, candidateId);
+      const url = `https://myneta.info/${electionSlug}/candidate.php?candidate_id=${candidateId}`;
+      const result = await scrapePolitician(url);
+      const scrapedData = result && result.success ? result.data : result;
+      
+      if (!scrapedData) {
+        console.warn(`No data returned for ${candidateId}`);
+        continue;
+      }
       
       // Convert to Politician format
       const politician: Politician = {
         id: candidateId,
         name: scrapedData.name || overrideName,
         slug: (scrapedData.name || overrideName).toLowerCase().replace(/\s+/g, '-'),
-        party: scrapedData.party,
-        partyLogo: getPartyLogo(scrapedData.party),
-        state: scrapedData.state,
-        constituency: scrapedData.constituency,
-        photoUrl: scrapedData.photoUrl,
-        mynetaId: scrapedData.mynetaId,
-        electionSlug: scrapedData.electionSlug,
-        age: Math.floor(Math.random() * 30) + 45, // Estimate
-        approvalRating: Math.floor(Math.random() * 60) + 30,
-        totalAssets: Math.round((Math.random() * 50 + 5) * 100) / 100,
-        criminalCases: Math.floor(Math.random() * 10),
-        education: 'Graduate',
+        party: scrapedData.party || 'Independent',
+        partyLogo: getPartyLogo(scrapedData.party || 'Independent'),
+        state: scrapedData.state || 'India',
+        constituency: scrapedData.constituency || 'Unknown',
+        photoUrl: scrapedData.photoUrl || '',
+        mynetaId: candidateId.toString(),
+        electionSlug: electionSlug,
+        age: scrapedData.age || Math.floor(Math.random() * 30) + 45, 
+        approvalRating: scrapedData.approvalRating || Math.floor(Math.random() * 60) + 30,
+        totalAssets: scrapedData.totalAssets || Math.round((Math.random() * 50 + 5) * 100) / 100,
+        criminalCases: scrapedData.criminalCases !== undefined ? scrapedData.criminalCases : Math.floor(Math.random() * 10),
+        education: scrapedData.education || 'Graduate',
         attendance: Math.floor(Math.random() * 40) + 50,
         verified: true,
         status: 'active',
-        votes: { up: Math.floor(Math.random() * 10000), down: Math.floor(Math.random() * 5000) },
-        history: [{ year: 2024, position: 'Candidate', result: Math.random() > 0.5 ? 'Won' : 'Lost' }],
-        assetsBreakdown: [{ movable: 0.5, immovable: 1.0, liabilities: 0 }],
+        votes: scrapedData.votes || { up: Math.floor(Math.random() * 10000), down: Math.floor(Math.random() * 5000) },
+        history: scrapedData.history || [{ year: 2024, position: 'Candidate', result: Math.random() > 0.5 ? 'Won' : 'Lost' }],
+        assetsBreakdown: scrapedData.assetsBreakdown || [{ movable: 0.5, immovable: 1.0, liabilities: 0 }],
         news: [],
         announcements: [],
         complaintStats: { total: 0, resolved: 0, pending: 0 }

@@ -2,19 +2,20 @@
 import React, { useState } from 'react';
 import { Search, Filter, Plus, Users, CheckCircle, Trash2 } from 'lucide-react';
 import { Politician } from '../../../types';
+import ImageWithFallback from '../../../components/ImageWithFallback';
 
 interface Props {
     type: string;
     data: Politician[];
     onAdd: () => void;
     onDelete: (id: number) => void;
+    searchQuery: string;
+    onSearchChange: (query: string) => void;
+    loading?: boolean;
 }
 
-const PoliticianTable: React.FC<Props> = ({ type, data, onAdd, onDelete }) => {
-    const [search, setSearch] = useState('');
-    
-    const filtered = data.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
-    const isEmpty = filtered.length === 0;
+const PoliticianTable: React.FC<Props> = ({ type, data, onAdd, onDelete, searchQuery, onSearchChange, loading }) => {
+    const isEmpty = data.length === 0 && !loading;
 
     return (
         <div className="bg-white border border-slate-200 rounded-[24px] shadow-sm flex-grow flex flex-col overflow-hidden">
@@ -26,8 +27,8 @@ const PoliticianTable: React.FC<Props> = ({ type, data, onAdd, onDelete }) => {
                         type="text" 
                         placeholder={`Search ${type}s...`}
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
+                        value={searchQuery}
+                        onChange={e => onSearchChange(e.target.value)}
                     />
                 </div>
                 <div className="flex gap-2">
@@ -45,7 +46,12 @@ const PoliticianTable: React.FC<Props> = ({ type, data, onAdd, onDelete }) => {
 
             {/* Table */}
             <div className="flex-grow overflow-y-auto custom-scrollbar">
-                {isEmpty ? (
+                {loading ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                        <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+                        <p className="font-medium text-sm">Loading...</p>
+                    </div>
+                ) : isEmpty ? (
                     <div className="h-full flex flex-col items-center justify-center text-slate-400">
                         <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
                             <Users size={32} className="opacity-20" />
@@ -64,11 +70,11 @@ const PoliticianTable: React.FC<Props> = ({ type, data, onAdd, onDelete }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filtered.map(p => (
+                            {data.map(p => (
                                 <tr key={p.id} className="hover:bg-slate-50/80 transition-colors group">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
-                                            <img src={p.photoUrl} className="w-10 h-10 rounded-full object-cover border border-slate-200" alt="" />
+                                            <ImageWithFallback src={p.photoUrl} className="w-10 h-10 rounded-full object-cover border border-slate-200" alt="" />
                                             <div>
                                                 <p className="font-bold text-slate-900 text-sm">{p.name}</p>
                                                 <p className="text-xs text-slate-500">{p.age} yrs • {p.education}</p>

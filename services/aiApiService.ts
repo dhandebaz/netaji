@@ -54,13 +54,30 @@ function getActiveProvider(): AIProvider | null {
  */
 export async function callAIAPI(prompt: string, context?: any): Promise<string> {
   try {
+    // 1. Try Backend Proxy first (Secure, Centralized)
+    try {
+      const backendRes = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, context })
+      });
+      
+      if (backendRes.ok) {
+        const data = await backendRes.json();
+        if (data.text) return data.text;
+      }
+    } catch (e) {
+      console.warn('[AI] Backend proxy failed, falling back to client-side:', e);
+    }
+
+    // 2. Fallback to Client-Side (Legacy / Dev)
     const provider = getActiveProvider();
     if (!provider) {
       console.warn('[AI] No API key configured. Set VITE_ANTHROPIC_API_KEY or VITE_GOOGLE_API_KEY');
       return '';
     }
 
-    console.log(`[AI] Using ${provider.name}`);
+    console.info(`[AI] Using ${provider.name} (Client-side)`);
 
     if (provider.name === 'Anthropic Claude') {
       return await callAnthropicAPI(prompt, provider.apiKey!, context);

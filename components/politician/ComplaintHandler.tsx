@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { PublicComplaint } from '../../types';
-import { MOCK_COMPLAINTS } from '../../constants';
+import { getComplaintsByPolitician, updateComplaintStatus } from '../../services/dataService';
 import { AlertCircle, CheckCircle, MessageSquare, MapPin, ThumbsUp, Clock, Upload } from 'lucide-react';
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
 const ComplaintHandler: React.FC<Props> = ({ politicianId }) => {
     // Filter complaints for this politician
     const [complaints, setComplaints] = useState<PublicComplaint[]>(
-        MOCK_COMPLAINTS.filter(c => c.politicianId === politicianId)
+        getComplaintsByPolitician(politicianId)
     );
     const [activeId, setActiveId] = useState<string | null>(null);
     const [responseText, setResponseText] = useState('');
@@ -19,9 +19,8 @@ const ComplaintHandler: React.FC<Props> = ({ politicianId }) => {
     const handleResolve = (id: string) => {
         if (!responseText) return alert("Please enter Proof of Work description.");
         
-        setComplaints(prev => prev.map(c => 
-            c.id === id ? { ...c, status: 'resolved', proofOfWork: responseText } : c
-        ));
+        updateComplaintStatus(id, 'resolved', responseText);
+        setComplaints(getComplaintsByPolitician(politicianId));
         setActiveId(null);
         setResponseText('');
     };

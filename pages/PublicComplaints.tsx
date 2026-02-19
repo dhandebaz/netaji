@@ -16,12 +16,12 @@ const PublicComplaints: React.FC = () => {
         
         // Listen for real-time complaint updates from admin panel
         const unsubscribe = dataSyncEvents.on('complaintsFiled', (updatedComplaints: any[]) => {
-            console.log('[PublicComplaints] Complaints updated from admin:', updatedComplaints.length);
+            console.debug('[PublicComplaints] Complaints updated from admin:', updatedComplaints.length);
             setComplaints(updatedComplaints);
         });
         
         return () => {
-            window.removeEventListener('neta:complaintsFiled', unsubscribe as any);
+            unsubscribe();
         };
     }, []);
 

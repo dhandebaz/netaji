@@ -1,10 +1,32 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Gamepad2, Play, Star, Users } from 'lucide-react';
-import { MOCK_GAMES } from '../constants';
+import { getAllGames, Game, dataSyncEvents } from '../services/dataService';
+import ImageWithFallback from '../components/ImageWithFallback';
+import { useToast } from '../context/ToastContext';
 
 const GamesArcade: React.FC = () => {
+    const [games, setGames] = useState<Game[]>([]);
+    const { addToast } = useToast();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        setGames(getAllGames());
+
+        const handleUpdate = (updatedGames: Game[]) => {
+            setGames(updatedGames);
+        };
+
+        const cleanup = dataSyncEvents.on('gamesUpdated', handleUpdate);
+        return cleanup;
+    }, []);
+
+    const handlePlay = (gameId: string) => {
+        navigate(`/games/play/${gameId}`);
+    };
+
     return (
         <div className="min-h-screen bg-slate-900 font-sans pt-24 pb-20 px-4 md:px-8">
             <div className="max-w-7xl mx-auto">
@@ -26,14 +48,15 @@ const GamesArcade: React.FC = () => {
 
                 {/* Game Grid */}
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {MOCK_GAMES.map((game) => (
+                    {games.map((game) => (
                         <motion.div 
                             key={game.id}
                             whileHover={{ y: -10 }}
                             className="bg-slate-800 rounded-[32px] overflow-hidden border border-slate-700 shadow-2xl group cursor-pointer"
+                            onClick={() => handlePlay(game.id)}
                         >
                             <div className="h-48 bg-slate-700 relative overflow-hidden">
-                                <img src={game.thumbnailUrl} alt={game.title} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity group-hover:scale-110 duration-500" />
+                                <ImageWithFallback src={game.thumbnailUrl} alt={game.title} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity group-hover:scale-110 duration-500" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent"></div>
                                 <button className="absolute bottom-4 right-4 w-12 h-12 bg-white text-slate-900 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                                     <Play size={24} fill="currentColor" className="ml-1"/>
@@ -48,7 +71,7 @@ const GamesArcade: React.FC = () => {
                                 <div className="flex items-center justify-between pt-4 border-t border-slate-700">
                                     <div className="flex items-center gap-4 text-sm font-bold text-slate-300">
                                         <span className="flex items-center gap-1"><Users size={14}/> {game.plays.toLocaleString()}</span>
-                                        <span className="flex items-center gap-1 text-yellow-500"><Star size={14} fill="currentColor"/> {game.rating}</span>
+                                        <span className="flex items-center gap-1 text-yellow-500"><Star size={14} fill="currentColor"/> {game.rating || 'New'}</span>
                                     </div>
                                     <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Play Now</span>
                                 </div>

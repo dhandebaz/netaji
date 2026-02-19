@@ -1,49 +1,83 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Filter, ArrowUpDown, TrendingUp, AlertTriangle, DollarSign } from 'lucide-react';
-import { getAllPoliticians, getStates } from '../services/dataService';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, ArrowUpDown } from 'lucide-react';
+import { getAllPoliticians, getStates, dataSyncEvents, syncPoliticiansWithBackend } from '../services/dataService';
+import { getPoliticians } from '../services/apiService';
 import { SortOption, Politician } from '../types';
 import PoliticianBubble from '../components/PoliticianBubble';
-import { fuzzySearch } from '../services/searchService';
 import { motion } from 'framer-motion';
+import { useDebounce } from '../hooks/useDebounce';
 
 const PoliticianRankings: React.FC = () => {
   const [politicians, setPoliticians] = useState<Politician[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedState, setSelectedState] = useState('');
   const [sortOption, setSortOption] = useState<SortOption>(SortOption.BEST_APPROVAL);
+  
+  const debouncedSearch = useDebounce(searchTerm, 500);
   const STATES = getStates();
 
+  // Initial load and sync
   useEffect(() => {
-    const allPoliticians = getAllPoliticians();
-    setPoliticians(allPoliticians);
+    const loadInitial = async () => {
+      setLoading(true);
+      // Load from local cache first for instant render
+      const cached = getAllPoliticians();
+      if (cached.length > 0) setPoliticians(cached);
+      
+      // Sync with backend
+      await syncPoliticiansWithBackend();
+      setLoading(false);
+    };
+    loadInitial();
+
+    // Listen for real-time updates
+    const unsubscribe = dataSyncEvents.on('politiciansUpdated', (updated: Politician[]) => {
+      // Only update if we are not actively searching/filtering on server
+      if (!debouncedSearch && !selectedState) {
+        setPoliticians(updated);
+      }
+    });
+
+    return () => {
+       // @ts-ignore
+       if (window.removeEventListener) window.removeEventListener('neta:politiciansUpdated', unsubscribe as any);
+       // dataSyncEvents.off is not exposed? Assuming dataSyncEvents is EventEmitter
+    };
   }, []);
 
-  const filteredPoliticians = useMemo(() => {
-    let result = [...politicians];
+  // Server-side Search & Filter
+  useEffect(() => {
+    const fetchFiltered = async () => {
+      setLoading(true);
+      try {
+        const params: any = {};
+        if (debouncedSearch) params.search = debouncedSearch;
+        if (selectedState) params.state = selectedState;
+        
+        // Map sort option to API sort param
+        let sortParam = 'approval';
+        if (sortOption === SortOption.MOST_ASSETS) sortParam = 'assets';
+        if (sortOption === SortOption.MOST_CRIMINAL) sortParam = 'cases';
+        
+        params.sort = sortParam;
+
+        const data = await getPoliticians(params);
+        if (data) {
+          const results = Array.isArray(data) ? data : (data.data || []);
+          setPoliticians(results);
+        }
+      } catch (e) {
+        console.error("Search failed", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFiltered();
     
-    // Filter
-    if (searchTerm) result = fuzzySearch(result, searchTerm, ['name', 'party', 'constituency']);
-    if (selectedState) result = result.filter(p => p.state === selectedState);
-    
-    // Sort
-    switch (sortOption) {
-      case SortOption.BEST_APPROVAL: 
-        result.sort((a, b) => b.approvalRating - a.approvalRating); 
-        break;
-      case SortOption.WORST_APPROVAL: 
-        result.sort((a, b) => a.approvalRating - b.approvalRating); 
-        break;
-      case SortOption.MOST_ASSETS: 
-        result.sort((a, b) => b.totalAssets - a.totalAssets); 
-        break;
-      case SortOption.MOST_CRIMINAL: 
-        result.sort((a, b) => b.criminalCases - a.criminalCases); 
-        break;
-      default: break;
-    }
-    return result;
-  }, [searchTerm, selectedState, sortOption]);
+  }, [debouncedSearch, selectedState, sortOption]);
 
   return (
     <div className="min-h-screen bg-slate-50 pt-28 pb-20 px-4 md:px-8 font-sans">
@@ -115,8 +149,10 @@ const PoliticianRankings: React.FC = () => {
             layout
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-6 gap-y-10"
         >
-            {filteredPoliticians.length > 0 ? (
-                filteredPoliticians.map((p, i) => (
+            {loading ? (
+                <div className="col-span-full text-center py-20 text-slate-400">Loading...</div>
+            ) : politicians.length > 0 ? (
+                politicians.map((p, i) => (
                     <motion.div 
                         key={p.id}
                         initial={{ opacity: 0, y: 20 }}
@@ -145,14 +181,13 @@ const PoliticianRankings: React.FC = () => {
                     <p className="text-slate-500 font-medium">No profiles match your criteria.</p>
                     <button 
                         onClick={() => { setSearchTerm(''); setSelectedState(''); }}
-                        className="mt-4 text-blue-600 font-bold text-sm hover:underline"
+                        className="mt-4 text-blue-600 font-bold hover:underline"
                     >
                         Clear Filters
                     </button>
                 </div>
             )}
         </motion.div>
-
       </div>
     </div>
   );

@@ -108,6 +108,7 @@ const PoliticianProfile: React.FC = () => {
                 setActiveTab={setActiveTab}
                 politician={politician}
                 insights={insights}
+                loadingInsights={loadingInsights}
                 news={news}
                 loadingNews={loadingNews}
                 myNetaUrl={myNetaUrl}

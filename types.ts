@@ -85,6 +85,7 @@ export interface Politician {
   attendance: number; // 0-100
   verified: boolean;
   status: 'active' | 'retired' | 'deceased';
+  role?: 'elected' | 'candidate';
   votes: {
     up: number;
     down: number;

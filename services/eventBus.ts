@@ -33,7 +33,7 @@ export function on(eventName: string, callback: EventCallback): () => void {
 }
 
 export function emit(eventName: string, data: any, local: boolean = true): void {
-  console.log(`[EventBus] ${local ? 'Local' : 'SSE'} emit: ${eventName}`, data);
+  console.debug(`[EventBus] ${local ? 'Local' : 'SSE'} emit: ${eventName}`, data);
   const callbacks = eventListeners.get(eventName);
   if (callbacks) {
     callbacks.forEach(callback => {

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Gamepad2, Upload, Trash2, Edit } from 'lucide-react';
 import { getAllGames, deleteGame } from '../../services/dataService';
+import ImageWithFallback from '../../components/ImageWithFallback';
 
 const AdminGames: React.FC = () => {
     const [games, setGames] = useState<any[]>([]);
@@ -33,7 +34,7 @@ const AdminGames: React.FC = () => {
                 {games.map(game => (
                     <div key={game.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-6">
                         <div className="w-24 h-16 bg-slate-100 rounded-xl overflow-hidden shrink-0">
-                            <img src={game.thumbnailUrl} className="w-full h-full object-cover" alt="" />
+                            <ImageWithFallback src={game.thumbnailUrl} className="w-full h-full object-cover" alt="" />
                         </div>
                         <div className="flex-grow">
                             <h3 className="font-bold text-lg text-slate-900">{game.title}</h3>

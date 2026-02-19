@@ -59,6 +59,32 @@ export interface PoliticianInsights {
 }
 
 /**
+ * Helper to retry AI calls with exponential backoff
+ */
+async function retryAI<T>(
+  operation: () => Promise<T>, 
+  retries = 3, 
+  delay = 1000
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error: any) {
+    if (retries <= 0) throw error;
+    
+    // Check if it's a transient error (e.g. rate limit 429 or server error 5xx)
+    const isTransient = error.message?.includes('429') || error.message?.includes('500') || error.message?.includes('503');
+    
+    if (isTransient) {
+      console.warn(`AI call failed, retrying in ${delay}ms... (${retries} attempts left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryAI(operation, retries - 1, delay * 2);
+    }
+    
+    throw error;
+  }
+}
+
+/**
  * Extracts the Voter ID number from an image using Gemini Vision.
  * Uses gemini-2.5-flash for low latency.
  */
@@ -68,38 +94,40 @@ export const extractVoterIdFromImage = async (base64Data: string, mimeType: stri
     return null;
   }
   
-  try {
-    const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: cleanBase64
+  return retryAI(async () => {
+    try {
+      const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+  
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: cleanBase64
+              }
+            },
+            {
+              text: "Extract the Voter ID (EPIC Number) from this Indian Voter ID card. Return ONLY the alphanumeric ID number. If not found, return 'NOT_FOUND'."
             }
-          },
-          {
-            text: "Extract the Voter ID (EPIC Number) from this Indian Voter ID card. Return ONLY the alphanumeric ID number. If not found, return 'NOT_FOUND'."
-          }
-        ]
-      },
-      config: {
-        temperature: 0.1, // Low temperature for deterministic OCR
-      }
-    });
-
-    const text = response.text?.trim();
-    if (!text || text === 'NOT_FOUND') return null;
-    
-    // Basic cleanup to remove any markdown or extra spaces
-    return text.replace(/[^A-Z0-9]/g, '');
-  } catch (error) {
-    console.error("OCR Failed:", error);
-    return null;
-  }
+          ]
+        },
+        config: {
+          temperature: 0.1, // Low temperature for deterministic OCR
+        }
+      });
+  
+      const text = response.text?.trim();
+      if (!text || text === 'NOT_FOUND') return null;
+      
+      // Basic cleanup to remove any markdown or extra spaces
+      return text.replace(/[^A-Z0-9]/g, '');
+    } catch (error) {
+      console.error("OCR Failed:", error);
+      throw error; // Re-throw for retry mechanism
+    }
+  });
 };
 
 /**
@@ -108,7 +136,7 @@ export const extractVoterIdFromImage = async (base64Data: string, mimeType: stri
  */
 export const generateFeatureCode = async (request: string, onProgress?: (log: string) => void): Promise<CodeReviewResult> => {
   const log = (msg: string) => {
-      console.log(`[NetaAI] ${msg}`);
+      console.info(`[NetaAI] ${msg}`);
       if (onProgress) onProgress(msg);
   };
 
@@ -199,7 +227,7 @@ export const generateFeatureCode = async (request: string, onProgress?: (log: st
 
   } catch (error: any) {
     log(`❌ Generation Failed: ${error.message}`);
-    throw error;
+    return fallback();
   }
 };
 
@@ -314,7 +342,7 @@ export const draftRTIApplication = async (task: RTITask, volunteerName: string, 
     return response.text || "Failed to generate application draft. Please try again.";
   } catch (error) {
     console.error("RTI Drafting Failed:", error);
-    throw error;
+    return fallback();
   }
 };
 
@@ -374,7 +402,7 @@ export const generatePoliticianInsights = async (politician: Politician): Promis
         return JSON.parse(response.text) as PoliticianInsights;
     } catch (error) {
         console.error("Insight Generation Failed:", error);
-        throw error;
+        return fallback();
     }
 };
 
@@ -383,7 +411,10 @@ export const generatePoliticianInsights = async (politician: Politician): Promis
  */
 export const runNetaAIChat = async (history: ChatMessage[], message: string): Promise<string> => {
   if (!ai) {
-    return "AI features are not available. Please configure the Gemini API key to enable the chat assistant.";
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    return "I am currently in offline mode because the AI service is not configured. " + 
+           "I can only help with basic information that is already available on the page. " +
+           "Please check back later for full AI capabilities.";
   }
   
   try {

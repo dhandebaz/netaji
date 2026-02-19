@@ -1,6 +1,7 @@
 
 import { fetchNewsForPolitician } from './rssService';
-import { MOCK_POLITICIANS, DEFAULT_PLACEHOLDER_IMAGE } from '../constants';
+import { DEFAULT_PLACEHOLDER_IMAGE } from '../constants';
+import { getAllPoliticians } from './dataService';
 
 export interface CronJob {
   id: string;
@@ -139,10 +140,11 @@ export const runJob = async (jobId: string): Promise<void> => {
 // --- WORKERS ---
 
 const performRSSSync = async () => {
-  addLog('daily-rss-fetch', `Starting sequential fetch for ${MOCK_POLITICIANS.length} politicians...`, 'info');
+  const politicians = getAllPoliticians();
+  addLog('daily-rss-fetch', `Starting sequential fetch for ${politicians.length} politicians...`, 'info');
   
   // Sequential execution to avoid rate limiting
-  for (const p of MOCK_POLITICIANS) {
+  for (const p of politicians) {
     try {
       await fetchNewsForPolitician(p.name);
       // Simulate storage of news (In a real app, this would write to DB)
@@ -157,10 +159,11 @@ const performRSSSync = async () => {
 
 const performIntegrityCheck = async () => {
   let issues = 0;
+  const politicians = getAllPoliticians();
   
   addLog('data-integrity-check', 'Starting deep scan of politician registry...', 'info');
 
-  for (const p of MOCK_POLITICIANS) {
+  for (const p of politicians) {
     const missingFields = [];
     
     if (!p.mynetaId) missingFields.push('MyNeta ID');

@@ -8,7 +8,8 @@ import {
   CheckCircle, Layers
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { STATES, MOCK_POLITICIANS } from '../constants';
+import { STATES } from '../constants';
+import { getAllPoliticians } from '../services/dataService';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, BarChart, Bar, Legend
@@ -101,7 +102,7 @@ const ConstituencyMaps: React.FC = () => {
 
   const activePoliticians = useMemo(() => {
     if (!selectedState) return [];
-    return MOCK_POLITICIANS.filter(p => p.state === selectedState);
+    return getAllPoliticians().filter(p => p.state === selectedState);
   }, [selectedState]);
 
   const stats = useMemo(() => {
@@ -336,7 +337,7 @@ const ConstituencyMaps: React.FC = () => {
                                             <div className="space-y-2">
                                                 {activePoliticians.length > 0 ? activePoliticians.map(p => (
                                                     <Link to={`/politician/${p.slug}`} key={p.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-blue-300 hover:shadow-md transition-all bg-white group">
-                                                        <img src={p.photoUrl} className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow-sm" alt={p.name} />
+                                                        <ImageWithFallback src={p.photoUrl} className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow-sm" alt={p.name} />
                                                         <div className="flex-grow">
                                                             <p className="font-bold text-sm text-slate-900 group-hover:text-blue-600 transition-colors">{p.name}</p>
                                                             <p className="text-[10px] text-slate-500 font-bold">{p.party} • {p.constituency}</p>

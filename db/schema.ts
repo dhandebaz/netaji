@@ -3,6 +3,7 @@ import { relations } from 'drizzle-orm';
 
 export const politicians = pgTable('politicians', {
   id: serial('id').primaryKey(),
+  tenantId: text('tenant_id'),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   party: text('party').notNull(),
@@ -30,6 +31,7 @@ export const politicians = pgTable('politicians', {
 
 export const votes = pgTable('votes', {
   id: serial('id').primaryKey(),
+  tenantId: text('tenant_id'),
   politicianId: integer('politician_id').references(() => politicians.id),
   voteType: text('vote_type').notNull(),
   voterId: text('voter_id'),
@@ -42,6 +44,7 @@ export const complaints = pgTable('complaints', {
   politicianId: integer('politician_id').references(() => politicians.id),
   userId: text('user_id'),
   userName: text('user_name'),
+  tenantId: text('tenant_id'),
   category: text('category').notNull(),
   description: text('description').notNull(),
   location: text('location'),
@@ -55,6 +58,7 @@ export const complaints = pgTable('complaints', {
 
 export const volunteers = pgTable('volunteers', {
   id: serial('id').primaryKey(),
+  tenantId: text('tenant_id'),
   name: text('name').notNull(),
   email: text('email').unique(),
   phone: text('phone'),
@@ -69,6 +73,7 @@ export const volunteers = pgTable('volunteers', {
 
 export const rtiTasks = pgTable('rti_tasks', {
   id: serial('id').primaryKey(),
+  tenantId: text('tenant_id'),
   politicianId: integer('politician_id').references(() => politicians.id),
   politicianName: text('politician_name'),
   topic: text('topic').notNull(),

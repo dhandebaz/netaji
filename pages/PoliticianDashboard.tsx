@@ -6,16 +6,30 @@ import {
     Users, ThumbsUp, ThumbsDown, Bell, Plus, Check, AlertCircle
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { MOCK_POLITICIANS, MOCK_RTI_TASKS } from '../constants';
+import { getAllPoliticians, getAllRTITasks } from '../services/dataService';
 import { motion } from 'framer-motion';
 import ComplaintHandler from '../components/politician/ComplaintHandler';
+import ImageWithFallback from '../components/ImageWithFallback';
 
 const PoliticianDashboard: React.FC = () => {
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState('overview');
     
     // Mock Data for current politician (assuming logged in user maps to a politician)
-    const politician = MOCK_POLITICIANS[7]; // Akhilesh Yadav for demo
+    const politicians = getAllPoliticians();
+    const politician = politicians.find(p => p.name.includes("Akhilesh")) || politicians[0] || {
+        id: "demo",
+        name: "Demo Politician",
+        party: "Independent",
+        constituency: "Unknown",
+        state: "India",
+        photoUrl: "",
+        approvalRating: 50,
+        votes: { up: 0, down: 0 },
+        totalAssets: 0,
+        criminalCases: 0
+    };
+    
     const sentimentData = [
         { date: 'Oct 1', up: 40, down: 20 },
         { date: 'Oct 5', up: 45, down: 25 },
@@ -25,7 +39,7 @@ const PoliticianDashboard: React.FC = () => {
         { date: 'Oct 25', up: 75, down: 35 },
     ];
 
-    const rtiRequests = MOCK_RTI_TASKS.filter(t => t.politicianId === politician.id || t.politicianName === politician.name);
+    const rtiRequests = getAllRTITasks().filter(t => t.politicianId === politician.id || t.politicianName === politician.name);
 
     if (!user || user.role !== 'representative' && user.role !== 'superadmin') {
         return <div className="min-h-screen flex items-center justify-center">Access Denied</div>;
@@ -39,7 +53,7 @@ const PoliticianDashboard: React.FC = () => {
                 <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
                     <div>
                         <div className="flex items-center gap-3 mb-2">
-                            <img src={politician.photoUrl} className="w-12 h-12 rounded-full object-cover ring-2 ring-blue-500" alt="Profile" />
+                            <ImageWithFallback src={politician.photoUrl} className="w-12 h-12 rounded-full object-cover ring-2 ring-blue-500" alt="Profile" />
                             <div>
                                 <h1 className="text-2xl font-black text-slate-900">Welcome, {politician.name}</h1>
                                 <p className="text-slate-500 font-medium text-sm">{politician.designation || 'Member of Parliament'} • {politician.constituency}</p>

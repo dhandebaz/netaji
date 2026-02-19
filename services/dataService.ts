@@ -26,7 +26,9 @@ let politicianCache: Politician[] = [];
 // Event emitter for data updates
 export const dataSyncEvents = {
   on: (event: string, callback: (data: any) => void) => {
-    window.addEventListener(`neta:${event}`, (e: any) => callback(e.detail));
+    const handler = (e: any) => callback(e.detail);
+    window.addEventListener(`neta:${event}`, handler);
+    return () => window.removeEventListener(`neta:${event}`, handler);
   },
   emit: (event: string, data: any) => {
     window.dispatchEvent(new CustomEvent(`neta:${event}`, { detail: data }));
@@ -72,7 +74,7 @@ export const initializeData = (): void => {
       .then(res => res.json())
       .then(data => {
         if (data.success && data.politicians?.length > 0) {
-          console.log(`✓ Loaded ${data.politicians.length} real politicians from backend`);
+          // console.debug(`✓ Loaded ${data.politicians.length} real politicians from backend`);
           safeSetItem(STORAGE_KEYS.POLITICIANS, data.politicians);
           politicianCache = data.politicians;
         } else {
@@ -81,7 +83,7 @@ export const initializeData = (): void => {
       })
       .catch(() => {
         // Fallback to mock data
-        console.log('Using mock politician data as fallback');
+        console.warn('Using mock politician data as fallback');
         const politiciansWithEmptyNews = MOCK_POLITICIANS.map(p => ({
           ...p,
           news: [],
@@ -120,19 +122,69 @@ export const initializeData = (): void => {
   }
   if (!localStorage.getItem(STORAGE_KEYS.GAMES)) {
     const mockGames = [
-      { id: 'g1', title: 'Chair Saver', description: 'Help the politician dodge accountability and keep their seat!', thumbnailUrl: 'https://images.unsplash.com/photo-1551103782-8ab07afd45c1?auto=format&fit=crop&q=80&w=400', plays: 12450 },
-      { id: 'g2', title: 'Scam Dodger', description: 'Run through the bureaucracy maze without getting caught!', thumbnailUrl: 'https://images.unsplash.com/photo-1633419461186-7d7507690054?auto=format&fit=crop&q=80&w=400', plays: 8900 }
+      { id: 'g1', title: 'Chair Saver', description: 'Help the politician dodge accountability and keep their seat!', thumbnailUrl: 'https://images.unsplash.com/photo-1551103782-8ab07afd45c1?auto=format&fit=crop&q=80&w=400', plays: 12450, rating: 4.8, playUrl: '/games/play/g1' },
+      { id: 'g2', title: 'Scam Dodger', description: 'Run through the bureaucracy maze without getting caught!', thumbnailUrl: 'https://images.unsplash.com/photo-1633419461186-7d7507690054?auto=format&fit=crop&q=80&w=400', plays: 8900, rating: 4.5, playUrl: '/games/play/g2' },
+      { id: 'g3', title: 'Debate Master', description: 'Shout louder than your opponent to win the argument!', thumbnailUrl: 'https://images.unsplash.com/photo-1544531586-fde5298cdd40?auto=format&fit=crop&q=80&w=400', plays: 5600, rating: 4.2, playUrl: '/games/play/g3' }
     ];
     safeSetItem(STORAGE_KEYS.GAMES, mockGames);
   }
+  
+  // Initial syncs
+  syncComplaints();
+  syncRTITasks();
+  syncVolunteers();
+  syncGamesWithBackend();
 };
+
+export const syncComplaints = async () => {
+    try {
+        const API_URL = getAPI_URL();
+        const res = await fetch(`${API_URL}/complaints`);
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                safeSetItem(STORAGE_KEYS.COMPLAINTS, data);
+                dataSyncEvents.emit('complaintsFiled', data);
+            }
+        }
+    } catch (e) { console.error('Failed to sync complaints', e); }
+};
+
+export const syncRTITasks = async () => {
+    try {
+        const API_URL = getAPI_URL();
+        const res = await fetch(`${API_URL}/rti-tasks`);
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                safeSetItem(STORAGE_KEYS.RTI_TASKS, data);
+                dataSyncEvents.emit('rtiTasksUpdated', data);
+            }
+        }
+    } catch (e) { console.error('Failed to sync RTI tasks', e); }
+};
+
+export const syncVolunteers = async () => {
+    try {
+        const API_URL = getAPI_URL();
+        const res = await fetch(`${API_URL}/volunteers`);
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                safeSetItem(STORAGE_KEYS.VOLUNTEERS, data);
+                dataSyncEvents.emit('volunteersUpdated', data);
+            }
+        }
+    } catch (e) { console.error('Failed to sync volunteers', e); }
+};
+
 
 // Fetch real data from backend and sync (with optional state parameter)
 export const fetchRealDataFromBackend = async (state: string = 'Delhi'): Promise<boolean> => {
   try {
     const API_URL = getAPI_URL();
-    console.log(`[dataService] Fetching politicians from ${state}...`);
-    const res = await fetch(`${API_URL}/admin/run-scraper?state=${state}`, { 
+    console.debug(`[dataService] Fetching politicians from ${state}...`);
+    const res = await fetch(`${API_URL}/admin/run-scraper?state=${state}`, {  
       method: 'POST',
       signal: AbortSignal.timeout(10000) 
     });
@@ -147,7 +199,7 @@ export const fetchRealDataFromBackend = async (state: string = 'Delhi'): Promise
             politicianCache = fullData;
             safeSetItem(STORAGE_KEYS.POLITICIANS, fullData);
             dataSyncEvents.emit('politiciansUpdated', fullData);
-            console.log(`✓ Real data fetched: ${fullData.length} politicians from ${state}`);
+            // console.debug(`✓ Real data fetched: ${fullData.length} politicians from ${state}`);
             return true;
           }
         }
@@ -194,9 +246,95 @@ export const getPoliticianById = (id: number): Politician | undefined => {
   return politicians.find(p => p.id === id);
 };
 
+export const fetchPoliticianById = async (id: number): Promise<Politician | undefined> => {
+  // 1. Check local cache first
+  const cached = getPoliticianById(id);
+  if (cached) return cached;
+
+  // 2. Fetch from backend
+  try {
+    const apiURL = getAPI_URL();
+    const res = await fetch(`${apiURL}/politicians/${id}`);
+    if (res.ok) {
+      const politician = await res.json();
+      // Update cache if not already present
+      if (!politicianCache.find(p => p.id === politician.id)) {
+        politicianCache.push(politician);
+        dataSyncEvents.emit('politiciansUpdated', politicianCache);
+      }
+      return politician;
+    }
+  } catch (e) {
+    console.error(`Error fetching politician ${id}:`, e);
+  }
+  return undefined;
+};
+
+export const fetchPoliticiansByIds = async (ids: number[]): Promise<Politician[]> => {
+  const uniqueIds = [...new Set(ids)];
+  const results: Politician[] = [];
+  
+  // Try to find as many as possible in cache first
+  const missingIds: number[] = [];
+  uniqueIds.forEach(id => {
+    const p = getPoliticianById(id);
+    if (p) results.push(p);
+    else missingIds.push(id);
+  });
+
+  if (missingIds.length === 0) return results;
+
+  // Fetch missing ones in bulk from backend
+  try {
+    const res = await getPoliticians({ ids: missingIds });
+    const fetched = Array.isArray(res) ? res : (res.data || []);
+    
+    fetched.forEach((p: Politician) => {
+      // Update cache
+      if (!politicianCache.find(cached => cached.id === p.id)) {
+        politicianCache.push(p);
+      }
+      results.push(p);
+    });
+    
+    // Emit update event
+    if (fetched.length > 0) {
+      dataSyncEvents.emit('politiciansUpdated', politicianCache);
+    }
+  } catch (e) {
+    console.error('Error fetching multiple politicians:', e);
+  }
+
+  return results;
+};
+
 export const getPoliticianBySlug = (slug: string): Politician | undefined => {
   const politicians = getAllPoliticians();
   return politicians.find(p => p.slug === slug);
+};
+
+export const fetchPoliticianBySlug = async (slug: string): Promise<Politician | undefined> => {
+  // 1. Check local cache first
+  const cached = getPoliticianBySlug(slug);
+  if (cached) return cached;
+
+  // 2. Fetch from backend
+  try {
+    const apiURL = getAPI_URL();
+    const res = await fetch(`${apiURL}/politicians/${slug}`);
+    if (res.ok) {
+      const politician = await res.json();
+      // Update cache if not already present
+      if (!politicianCache.find(p => p.id === politician.id)) {
+        politicianCache.push(politician);
+        dataSyncEvents.emit('politiciansUpdated', politicianCache);
+      }
+      return politician;
+    }
+  } catch (e) {
+    console.error(`Error fetching politician ${slug}:`, e);
+  }
+  return undefined;
 };
 
 export const getPoliticiansByState = (state: string): Politician[] => {
@@ -405,12 +543,24 @@ export const updateVolunteerStats = (volunteerId: number, points: number, rtisFi
   volunteers.forEach((v, i) => v.rank = i + 1);
   
   safeSetItem(STORAGE_KEYS.VOLUNTEERS, volunteers);
-  // Async backend sync
-  const API_URL_4 = getAPI_URL();
-  fetch(`${API_URL_4}/volunteers/${volunteerId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(volunteers[index]) }).catch(() => {});
-  // Emit volunteer event
-  dataSyncEvents.emit('volunteersUpdated', getAllVolunteers());
+  dataSyncEvents.emit('volunteersUpdated', volunteers);
+  
   return volunteers[index];
+};
+
+export interface Game {
+  id: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  plays: number;
+  rating?: number;
+  playUrl?: string;
+}
+
+export const getAllGames = (limit?: number): Game[] => {
+  const games = safeGetItem<Game[]>(STORAGE_KEYS.GAMES, []);
+  return limit ? games.slice(0, limit) : games;
 };
 
 export const getLeaderboard = (limit: number = 10): Volunteer[] => {
@@ -427,13 +577,13 @@ export const getRTITasksByStatus = (status: RTITask['status']): RTITask[] => {
   return tasks.filter(t => t.status === status);
 };
 
-export const addRTITask = (task: Omit<RTITask, 'id' | 'status' | 'generatedDate'>): RTITask => {
+export const addRTITask = (task: Omit<RTITask, 'id' | 'status' | 'generatedDate'> & { id?: string, status?: RTITask['status'], generatedDate?: string }): RTITask => {
   const tasks = getAllRTITasks();
   const newTask: RTITask = {
-    ...task,
-    id: `rti_${Date.now()}`,
     status: 'generated',
-    generatedDate: new Date().toISOString().split('T')[0]
+    generatedDate: new Date().toISOString().split('T')[0],
+    ...task,
+    id: task.id || `rti_${Date.now()}`,
   };
   tasks.unshift(newTask);
   safeSetItem(STORAGE_KEYS.RTI_TASKS, tasks);
@@ -474,6 +624,38 @@ export const fileRTITask = (taskId: string, proofUrl?: string): RTITask | null =
   const API_URL_7 = getAPI_URL();
   fetch(`${API_URL_7}/rti-tasks/${taskId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tasks[index]) }).catch(() => {});
   // Emit RTI event
+  dataSyncEvents.emit('rtiTasksUpdated', getAllRTITasks());
+  return tasks[index];
+};
+
+export const submitRTIResponse = (taskId: string, responseUrl: string): RTITask | null => {
+  const tasks = getAllRTITasks();
+  const index = tasks.findIndex(t => t.id === taskId);
+  if (index === -1) return null;
+  
+  tasks[index].status = 'response_received';
+  tasks[index].responseDate = new Date().toISOString();
+  tasks[index].governmentResponseUrl = responseUrl;
+  
+  safeSetItem(STORAGE_KEYS.RTI_TASKS, tasks);
+  // Async backend sync
+  const API_URL = getAPI_URL();
+  fetch(`${API_URL}/rti-tasks/${taskId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tasks[index]) }).catch(() => {});
+  dataSyncEvents.emit('rtiTasksUpdated', getAllRTITasks());
+  return tasks[index];
+};
+
+export const verifyRTITask = (taskId: string): RTITask | null => {
+  const tasks = getAllRTITasks();
+  const index = tasks.findIndex(t => t.id === taskId);
+  if (index === -1) return null;
+  
+  tasks[index].status = 'verified';
+  
+  safeSetItem(STORAGE_KEYS.RTI_TASKS, tasks);
+  // Async backend sync
+  const API_URL = getAPI_URL();
+  fetch(`${API_URL}/rti-tasks/${taskId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tasks[index]) }).catch(() => {});
   dataSyncEvents.emit('rtiTasksUpdated', getAllRTITasks());
   return tasks[index];
 };
@@ -599,16 +781,12 @@ export const recalculateAllApprovalRatings = (): void => {
   });
 };
 
-export const getAllGames = (limit?: number): any[] => {
-  const games = safeGetItem<any[]>(STORAGE_KEYS.GAMES, []);
-  return limit ? games.slice(0, limit) : games;
-};
-
-export const addGame = (game: Omit<any, 'id'>): any => {
+export const addGame = (game: Omit<Game, 'id' | 'plays'>): Game => {
   const games = getAllGames();
-  const newGame = {
+  const newGame: Game = {
     ...game,
     id: `g_${Date.now()}`,
+    plays: 0,
   };
   games.unshift(newGame);
   safeSetItem(STORAGE_KEYS.GAMES, games);
@@ -620,9 +798,9 @@ export const addGame = (game: Omit<any, 'id'>): any => {
   return newGame;
 };
 
-export const updateGame = (id: string, updates: any): any => {
+export const updateGame = (id: string, updates: Partial<Game>): Game | null => {
   const games = getAllGames();
-  const index = games.findIndex((g: any) => g.id === id);
+  const index = games.findIndex((g: Game) => g.id === id);
   if (index === -1) return null;
   games[index] = { ...games[index], ...updates };
   safeSetItem(STORAGE_KEYS.GAMES, games);
@@ -636,7 +814,7 @@ export const updateGame = (id: string, updates: any): any => {
 
 export const deleteGame = (id: string): boolean => {
   const games = getAllGames();
-  const filtered = games.filter((g: any) => g.id !== id);
+  const filtered = games.filter((g: Game) => g.id !== id);
   if (filtered.length === games.length) return false;
   safeSetItem(STORAGE_KEYS.GAMES, filtered);
   // Async backend sync
@@ -645,6 +823,42 @@ export const deleteGame = (id: string): boolean => {
   // Emit game event
   dataSyncEvents.emit('gamesUpdated', filtered);
   return true;
+};
+
+export const playGame = (id: string): { success: boolean; plays: number } => {
+  const games = getAllGames();
+  const index = games.findIndex((g: Game) => g.id === id);
+  if (index === -1) return { success: false, plays: 0 };
+  
+  games[index].plays += 1;
+  safeSetItem(STORAGE_KEYS.GAMES, games);
+  
+  // Async backend sync
+  const API_URL = getAPI_URL();
+  fetch(`${API_URL}/games/${id}/play`, { method: 'POST' }).catch(() => {});
+  
+  // Emit game event
+  dataSyncEvents.emit('gamesUpdated', games);
+  
+  return { success: true, plays: games[index].plays };
+};
+
+export const syncGamesWithBackend = async () => {
+  try {
+    const API_URL = getAPI_URL();
+    const res = await fetch(`${API_URL}/games`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        safeSetItem(STORAGE_KEYS.GAMES, data);
+        dataSyncEvents.emit('gamesUpdated', data);
+        return true;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to sync games', e);
+  }
+  return false;
 };
 
 initializeData();

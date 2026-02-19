@@ -10,6 +10,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { INDIAN_LANGUAGES } from '../constants';
+import GlobalSearch from './GlobalSearch';
 
 const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -84,6 +85,8 @@ const Navbar: React.FC = () => {
 
         {/* Language & Actions */}
         <div className="flex items-center gap-2 pr-1 shrink-0">
+           
+           <GlobalSearch />
            
            {/* Language Dropdown */}
            <div className="relative">

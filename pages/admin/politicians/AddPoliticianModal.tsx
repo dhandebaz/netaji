@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Globe, Loader, Download } from 'lucide-react';
 import { useToast } from '../../../context/ToastContext';
 import { Politician } from '../../../types';
+import { scrapePolitician } from '../../../services/apiService';
 
 interface Props {
     isOpen: boolean;
@@ -22,14 +23,34 @@ const AddPoliticianModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
 
     const handleScrape = async () => {
         setLoading(true);
-        // Simulate scraping delay
-        setTimeout(() => {
+        try {
+            const result = await scrapePolitician(url);
+            // apiService.ts: apiCall returns T. server.js returns { success: true, data: fetched }
+            // So result is { success: true, data: fetched }
+            if (result && result.success && result.data) {
+                const p = result.data;
+                addToast("Data fetched successfully from source", 'success');
+                
+                const nameParts = p.name ? p.name.split(' ') : ['Unknown', 'Candidate'];
+                const firstName = nameParts[0];
+                const lastName = nameParts.slice(1).join(' ') || '';
+
+                setManualForm({ 
+                    firstName, 
+                    lastName, 
+                    constituency: p.constituency || 'Unknown', 
+                    party: p.party || 'Independent' 
+                });
+                setMode('manual'); 
+            } else {
+                throw new Error('Failed to fetch data');
+            }
+        } catch (error) {
+            console.error(error);
+            addToast("Failed to scrape data. Please try again or enter manually.", 'error');
+        } finally {
             setLoading(false);
-            addToast("Data fetched successfully from source", 'success');
-            // Pre-fill manual form with mock scraped data
-            setManualForm({ firstName: 'Scraped', lastName: 'Candidate', constituency: 'Unknown', party: 'BJP' });
-            setMode('manual'); 
-        }, 2000);
+        }
     };
 
     const handleManualSubmit = (e: React.FormEvent) => {
