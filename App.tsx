@@ -9,6 +9,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { startAutoRefresh } from './services/dataRefreshScheduler';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import { Analytics } from '@vercel/analytics/react';
 const Home = lazy(() => import('./pages/Home'));
 const Login = lazy(() => import('./pages/Login'));
 const PoliticianProfile = lazy(() => import('./pages/PoliticianProfile'));
@@ -92,6 +93,7 @@ const App: React.FC = () => {
             <Footer />
             <AdminDataFetcher />
           </div>
+          <Analytics />
           </Router>
         </ToastProvider>
       </AuthProvider>
