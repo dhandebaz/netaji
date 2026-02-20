@@ -1,6 +1,7 @@
 
 import React, { useEffect, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { initializeData, syncPoliticiansWithBackend } from './services/dataService';
@@ -91,6 +92,7 @@ const App: React.FC = () => {
             </main>
             <Footer />
             <AdminDataFetcher />
+            <SpeedInsights />
           </div>
           </Router>
         </ToastProvider>
