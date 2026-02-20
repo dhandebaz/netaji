@@ -5,6 +5,8 @@ import ReverseLeaderboard from '../components/home/ReverseLeaderboard';
 import { getAllPoliticians, dataSyncEvents } from '../services/dataService';
 import { getPoliticians } from '../services/apiService';
 import { Politician } from '../types';
+import { Helmet } from 'react-helmet-async';
+import { getSystemSettings } from '../services/adminService';
 
 const Home: React.FC = () => {
   const [politicians, setPoliticians] = useState<Politician[]>([]);
@@ -78,7 +80,13 @@ const Home: React.FC = () => {
     }
   }, [selectedState]);
 
-  const displayedPoliticians = politicians; // We now fetch exactly what we need
+  const displayedPoliticians = politicians;
+  const seoSettings = getSystemSettings().seo || {};
+  const baseTitle = seoSettings.defaultTitle || 'Neta – Know Your Leader';
+  const baseDescription =
+    seoSettings.defaultDescription ||
+    'Neta is India’s citizen dashboard for MPs and MLAs. Track criminal records, assets, RTI impact, and real-time public sentiment for every representative.';
+  const canonicalUrl = 'https://neta.ink/';
 
   const handleStateSelect = (state: string) => {
     setSelectedState(state);
@@ -86,6 +94,14 @@ const Home: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
+      <Helmet>
+        <title>{baseTitle}</title>
+        <meta name="description" content={baseDescription} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content={baseTitle} />
+        <meta property="og:description" content={baseDescription} />
+        <meta property="og:url" content={canonicalUrl} />
+      </Helmet>
       <section className="relative pt-32 pb-12 px-4 mesh-gradient">
           <div className="max-w-4xl mx-auto relative z-10">
               <StateLocator onStateSelect={handleStateSelect} />

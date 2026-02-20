@@ -2,10 +2,25 @@
 import React from 'react';
 import { FileText, AlertTriangle, CheckCircle, Scale } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Helmet } from 'react-helmet-async';
 
 const TermsOfService: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 pt-32 pb-20 px-4 md:px-8 font-sans">
+      <Helmet>
+        <title>Terms of Service | Neta</title>
+        <meta
+          name="description"
+          content="Read the terms of service governing your use of the Neta platform for political transparency."
+        />
+        <link rel="canonical" href="https://neta.ink/terms" />
+        <meta property="og:title" content="Terms of Service | Neta" />
+        <meta
+          property="og:description"
+          content="Legal terms, liability limits, and usage policies for the Neta civic technology platform."
+        />
+        <meta property="og:url" content="https://neta.ink/terms" />
+      </Helmet>
       <div className="max-w-4xl mx-auto">
         
         {/* Header */}

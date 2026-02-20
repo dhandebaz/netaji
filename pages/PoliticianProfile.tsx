@@ -9,6 +9,8 @@ import { fetchPoliticianImage } from '../services/scraperService';
 import { generatePoliticianInsights, PoliticianInsights, isAIAvailable } from '../services/geminiService';
 import { NewsItem, Politician } from '../types';
 import { motion } from 'framer-motion';
+import { Helmet } from 'react-helmet-async';
+import { getSystemSettings } from '../services/adminService';
 
 import ProfileSidebar from '../components/profile/ProfileSidebar';
 import ProfileTabs from '../components/profile/ProfileTabs';
@@ -21,7 +23,6 @@ const PoliticianProfile: React.FC = () => {
   useEffect(() => {
     if (slug) {
       const found = getPoliticianBySlug(slug);
-      setPolitician(found);
     }
   }, [slug]);
   
@@ -64,6 +65,12 @@ const PoliticianProfile: React.FC = () => {
 
   const voteTotal = politician.votes.up + politician.votes.down;
   const upPercent = Math.round((politician.votes.up / voteTotal) * 100);
+  const seoSettings = getSystemSettings().seo || {};
+  const pageTitle = `${politician.name} | Neta`;
+  const description = `${politician.name}, ${politician.party}, ${politician.state}. Approval ${politician.approvalRating}%. Criminal cases: ${politician.criminalCases}.`;
+  const canonicalUrl = `https://neta.ink/politician/${politician.slug}`;
+  const ogImage = `https://neta.ink/api/og/politician/${politician.slug}`;
+  const robotsContent = seoSettings.allowIndexing === false ? 'noindex,nofollow' : 'index,follow';
 
   const handleVoteClick = (type: 'up' | 'down') => { setVoteType(type); setIsVoteModalOpen(true); };
   
@@ -77,6 +84,35 @@ const PoliticianProfile: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-32 pt-24 lg:pt-28">
+      <Helmet>
+        <title>{pageTitle}</title>
+        <meta name="description" content={description} />
+        <meta name="robots" content={robotsContent} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={description} />
+        <meta property="og:image" content={ogImage} />
+        <meta property="og:type" content="profile" />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={pageTitle} />
+        <meta name="twitter:description" content={description} />
+        <meta name="twitter:image" content={ogImage} />
+        <script type="application/ld+json">
+          {JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'Person',
+            name: politician.name,
+            jobTitle: 'Member of Parliament',
+            affiliation: politician.party,
+            address: {
+              '@type': 'PostalAddress',
+              addressRegion: politician.state,
+            },
+            url: canonicalUrl,
+          })}
+        </script>
+      </Helmet>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col lg:flex-row gap-8">
           

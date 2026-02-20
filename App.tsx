@@ -1,6 +1,6 @@
 
 import React, { useEffect, Suspense, lazy } from 'react';
-import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { initializeData, syncPoliticiansWithBackend } from './services/dataService';
@@ -9,6 +9,8 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { startAutoRefresh } from './services/dataRefreshScheduler';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import { Helmet } from 'react-helmet-async';
+import { getSystemSettings } from './services/adminService';
 const Home = lazy(() => import('./pages/Home'));
 const Login = lazy(() => import('./pages/Login'));
 const PoliticianProfile = lazy(() => import('./pages/PoliticianProfile'));
@@ -76,12 +78,27 @@ const AnimatedRoutes = () => {
 };
 
 const App: React.FC = () => {
+  const seo = getSystemSettings().seo || {};
+  const robotsContent = seo.allowIndexing === false ? 'noindex,nofollow' : 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1';
+  const baseTitle = seo.defaultTitle || 'Neta – Know Your Leader';
+  const baseDescription =
+    seo.defaultDescription ||
+    'Neta is India’s citizen dashboard for MPs and MLAs. Track criminal records, assets, RTI impact, and real-time public sentiment for every representative.';
+  const baseOgImage = seo.defaultOgImage || 'https://neta.ink/og-default.png';
   return (
     <ErrorBoundary>
       <AuthProvider>
         <ToastProvider>
           <Router>
           <ScrollToTop />
+          <Helmet>
+            <title>{baseTitle}</title>
+            <meta name="description" content={baseDescription} />
+            <meta name="robots" content={robotsContent} />
+            <meta property="og:title" content={baseTitle} />
+            <meta property="og:description" content={baseDescription} />
+            <meta property="og:image" content={baseOgImage} />
+          </Helmet>
           <div className="flex flex-col min-h-screen font-sans text-gray-900 antialiased selection:bg-blue-100 selection:text-blue-900">
             <Navbar />
             <main className="flex-grow">

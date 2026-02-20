@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import VolunteerLanding from './volunteer/VolunteerLanding';
 import VolunteerDashboard from './volunteer/VolunteerDashboard';
+import { Helmet } from 'react-helmet-async';
 
 const NyayFauj: React.FC = () => {
   const { user } = useAuth();
@@ -17,6 +18,20 @@ const NyayFauj: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
+        <Helmet>
+            <title>Nyay Fauj – Volunteer RTI Network | Neta</title>
+            <meta
+                name="description"
+                content="Join Nyay Fauj, a volunteer RTI network that files information requests and tracks systemic change."
+            />
+            <link rel="canonical" href="https://neta.ink/volunteer" />
+            <meta property="og:title" content="Nyay Fauj – Volunteer RTI Network | Neta" />
+            <meta
+                property="og:description"
+                content="Become part of a nationwide RTI volunteer force pushing for transparency and accountability."
+            />
+            <meta property="og:url" content="https://neta.ink/volunteer" />
+        </Helmet>
         <AnimatePresence mode="wait">
             {viewState === 'landing' ? (
                 <motion.div 

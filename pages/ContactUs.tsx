@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, MessageSquare, Send, CheckCircle, MapPin, Phone } from 'lucide-react';
 import { submitSupportTicket } from '../services/apiService';
+import { Helmet } from 'react-helmet-async';
 
 const ContactUs: React.FC = () => {
   const [formData, setFormData] = useState({ name: '', email: '', subject: '', message: '' });
@@ -23,6 +24,20 @@ const ContactUs: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pt-32 pb-20 px-4 md:px-8 font-sans">
+      <Helmet>
+        <title>Contact Us | Neta</title>
+        <meta
+          name="description"
+          content="Get support for data accuracy, payments, or platform usage. Reach the Neta team directly."
+        />
+        <link rel="canonical" href="https://neta.ink/contact" />
+        <meta property="og:title" content="Contact Us | Neta" />
+        <meta
+          property="og:description"
+          content="Contact the Neta team for questions about political data, API access, or support."
+        />
+        <meta property="og:url" content="https://neta.ink/contact" />
+      </Helmet>
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-16">
              <motion.div 

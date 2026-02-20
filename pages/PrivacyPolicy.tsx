@@ -2,10 +2,25 @@
 import React from 'react';
 import { Shield, Lock, Eye, Server, Mic, FileText } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Helmet } from 'react-helmet-async';
 
 const PrivacyPolicy: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 pt-32 pb-20 px-4 md:px-8 font-sans">
+      <Helmet>
+        <title>Privacy Policy | Neta</title>
+        <meta
+          name="description"
+          content="Learn how Neta handles your data, including voter ID verification, AI features, and usage analytics."
+        />
+        <link rel="canonical" href="https://neta.ink/privacy" />
+        <meta property="og:title" content="Privacy Policy | Neta" />
+        <meta
+          property="og:description"
+          content="Details on data collection, storage, and privacy practices for the Neta civic platform."
+        />
+        <meta property="og:url" content="https://neta.ink/privacy" />
+      </Helmet>
       <div className="max-w-4xl mx-auto">
         
         {/* Header */}

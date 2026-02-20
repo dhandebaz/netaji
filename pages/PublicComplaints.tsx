@@ -5,6 +5,7 @@ import { getAllComplaints, dataSyncEvents } from '../services/dataService';
 import PageTransition from '../components/PageTransition';
 import ComplaintCard from '../components/complaints/ComplaintCard';
 import { useHaptic } from '../hooks/useHaptic';
+import { Helmet } from 'react-helmet-async';
 
 const PublicComplaints: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -29,9 +30,29 @@ const PublicComplaints: React.FC = () => {
         c.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.location.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    const canonicalUrl = 'https://neta.ink/complaints';
 
     return (
         <PageTransition>
+            <Helmet>
+                <title>Civic Wall – Public Complaint Registry | Neta</title>
+                <meta name="description" content="Public complaint registry for citizens to report issues and demand accountability from representatives." />
+                <link rel="canonical" href={canonicalUrl} />
+                <meta property="og:title" content="Civic Wall – Public Complaint Registry | Neta" />
+                <meta
+                    property="og:description"
+                    content="Browse public complaints filed against representatives and track accountability in real time."
+                />
+                <meta property="og:url" content={canonicalUrl} />
+                <script type="application/ld+json">
+                    {JSON.stringify({
+                        '@context': 'https://schema.org',
+                        '@type': 'GovernmentService',
+                        name: 'Public Complaint Registry',
+                        provider: 'Neta',
+                    })}
+                </script>
+            </Helmet>
             <div className="min-h-screen bg-slate-50 pt-24 pb-20 px-4 md:px-8 font-sans">
                 <div className="max-w-5xl mx-auto">
                     

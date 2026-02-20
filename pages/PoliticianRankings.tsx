@@ -7,6 +7,7 @@ import { SortOption, Politician } from '../types';
 import PoliticianBubble from '../components/PoliticianBubble';
 import { motion } from 'framer-motion';
 import { useDebounce } from '../hooks/useDebounce';
+import { Helmet } from 'react-helmet-async';
 
 const PoliticianRankings: React.FC = () => {
   const [politicians, setPoliticians] = useState<Politician[]>([]);
@@ -79,8 +80,24 @@ const PoliticianRankings: React.FC = () => {
     
   }, [debouncedSearch, selectedState, sortOption]);
 
+  const canonicalUrl = 'https://neta.ink/rankings';
+
   return (
     <div className="min-h-screen bg-slate-50 pt-28 pb-20 px-4 md:px-8 font-sans">
+      <Helmet>
+        <title>Leaderboard – Politician Rankings | Neta</title>
+        <meta
+          name="description"
+          content="Leaderboard of Indian politicians ranked by approval, assets, and criminal cases with live public sentiment."
+        />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content="Leaderboard – Politician Rankings | Neta" />
+        <meta
+          property="og:description"
+          content="Compare representatives by approval rating, assets, and criminal records using real-time public sentiment."
+        />
+        <meta property="og:url" content={canonicalUrl} />
+      </Helmet>
       <div className="max-w-7xl mx-auto">
         
         {/* Header */}

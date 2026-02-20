@@ -171,6 +171,7 @@ const SuperAdmin: React.FC = () => {
                             <SettingsLink label="General" active={activeTab === 'settings-general'} onClick={() => handleTabChange('settings-general')} icon={<Globe size={14}/>} />
                             <SettingsLink label="AI & Models" active={activeTab === 'settings-ai'} onClick={() => handleTabChange('settings-ai')} icon={<BrainCircuit size={14}/>} />
                             <SettingsLink label="Data & Storage" active={activeTab === 'settings-data'} onClick={() => handleTabChange('settings-data')} icon={<Database size={14}/>} />
+                            <SettingsLink label="SEO & Previews" active={activeTab === 'settings-seo'} onClick={() => handleTabChange('settings-seo')} icon={<Globe size={14}/>} />
                             <SettingsLink label="Feature Flags" active={activeTab === 'settings-features'} onClick={() => handleTabChange('settings-features')} icon={<Sliders size={14}/>} />
                             <SettingsLink label="Security" active={activeTab === 'settings-security'} onClick={() => handleTabChange('settings-security')} icon={<Shield size={14}/>} />
                             <SettingsLink label="Billing" active={activeTab === 'settings-billing'} onClick={() => handleTabChange('settings-billing')} icon={<CreditCard size={14}/>} />

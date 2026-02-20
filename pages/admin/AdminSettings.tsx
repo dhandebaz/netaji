@@ -18,6 +18,7 @@ import SettingsFeatures from './settings/SettingsFeatures';
 import SettingsSecurity from './settings/SettingsSecurity';
 import SettingsBilling from './settings/SettingsBilling';
 import SettingsLogic from './settings/SettingsLogic';
+import SettingsSEO from './settings/SettingsSEO';
 
 interface Props {
     activePage?: string;
@@ -102,6 +103,7 @@ const AdminSettings: React.FC<Props> = ({ activePage = 'general' }) => {
                         {activePage === 'security' && <SettingsSecurity settings={settings} updateSettings={setSettings} />}
                         {activePage === 'billing' && <SettingsBilling settings={settings} updateSettings={setSettings} />}
                         {activePage === 'logic' && <SettingsLogic settings={settings} />}
+                        {activePage === 'seo' && <SettingsSEO settings={settings} updateSettings={setSettings} />}
                     </motion.div>
                 </AnimatePresence>
             </div>

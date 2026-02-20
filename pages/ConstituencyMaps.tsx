@@ -1,20 +1,21 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Search, Map as MapIcon, Users, TrendingUp, ChevronRight, Filter, 
-  BarChart3, Briefcase, AlertTriangle, PieChart as PieIcon, History, 
-  Zap, Download, FileText, Share2, ExternalLink, AlertOctagon, 
+import {
+  Search, Map as MapIcon, Users, TrendingUp, ChevronRight, Filter,
+  BarChart3, Briefcase, AlertTriangle, PieChart as PieIcon, History,
+  Zap, Download, FileText, Share2, ExternalLink, AlertOctagon,
   CheckCircle, Layers
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { STATES } from '../constants';
 import { getAllPoliticians, getConstituencyIntelByState, fetchRealDataFromBackend } from '../services/dataService';
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar, Legend
 } from 'recharts';
 import { jsPDF } from "jspdf";
+import { Helmet } from 'react-helmet-async';
 
 // --- Types & Advanced Data Generator ---
 
@@ -160,6 +161,20 @@ const ConstituencyMaps: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pt-20 pb-12 px-4 md:px-8 overflow-hidden">
+      <Helmet>
+        <title>Constituency Intel – Maps & Election Strategy | Neta</title>
+        <meta
+          name="description"
+          content="Interactive constituency intelligence with turnout trends, party share, and swing analysis across Indian states."
+        />
+        <link rel="canonical" href="https://neta.ink/maps" />
+        <meta property="og:title" content="Constituency Intel – Maps & Election Strategy | Neta" />
+        <meta
+          property="og:description"
+          content="Explore hyper-local electoral data and projections for all Indian constituencies."
+        />
+        <meta property="og:url" content="https://neta.ink/maps" />
+      </Helmet>
       
       {/* BACKGROUND DECOR */}
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">

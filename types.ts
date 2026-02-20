@@ -299,6 +299,12 @@ export interface SystemSettings {
         sessionTimeout: number; // Minutes
     };
     billing: DeveloperPricing;
+    seo?: {
+        defaultTitle?: string;
+        defaultDescription?: string;
+        defaultOgImage?: string;
+        allowIndexing?: boolean;
+    };
     gateways: PaymentGatewayConfig[];
 }
 

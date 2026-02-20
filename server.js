@@ -15,6 +15,7 @@ import admin from 'firebase-admin';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { fetchMultipleRealPoliticians, getFallbackPoliticians, fetchOneRealPolitician } from './services/realDataLoader.mjs';
 import { fetchRealPoliticiansFromMyNeta as fetchStatePoliticiansFromMyNeta } from './services/realMynetaScraper.mjs';
+import { ImageResponse } from '@vercel/og';
 
 const app = express();
 
@@ -30,6 +31,14 @@ app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
+
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  next();
+});
 
 app.use(compression());
 
@@ -61,6 +70,20 @@ app.use((req, res, next) => {
   res.set('Expires', '0');
   next();
 });
+
+const getBaseUrl = () => {
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/+$/, '');
+  return 'https://neta.ink';
+};
+
+const escapeXml = (value) => {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+};
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -413,6 +436,43 @@ async function ensureGrievancesTable() {
   }
 }
 
+let ensuredPerformanceLogs = false;
+async function ensurePerformanceLogsTable() {
+  if (!pool || ensuredPerformanceLogs) return;
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS performance_logs (
+      id SERIAL PRIMARY KEY,
+      tenant_id TEXT,
+      metric_name TEXT NOT NULL,
+      value REAL NOT NULL,
+      rating TEXT,
+      delta REAL,
+      metric_id TEXT,
+      navigation_type TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`);
+    ensuredPerformanceLogs = true;
+  } catch (e) {
+    ensuredPerformanceLogs = false;
+  }
+}
+
+async function loadSystemSettings() {
+  const data = getData();
+  const fallback = data.settings || {};
+  if (!pool) return fallback;
+  try {
+    await ensureSettingsTable();
+    const result = await pool.query('SELECT value FROM settings WHERE key = $1 LIMIT 1', ['system']);
+    if (result.rows[0]?.value) {
+      return result.rows[0].value;
+    }
+    return fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
 const initData = () => {
   if (!fs.existsSync(DATA_FILE)) {
     const initialData = {
@@ -524,6 +584,91 @@ app.get('/api/sse', (req, res) => {
 });
 
 const generateSlug = (name) => name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+
+app.get('/api/sitemap.xml', async (req, res) => {
+  const baseUrl = getBaseUrl();
+  let politicianSlugs = [];
+  if (pool) {
+    try {
+      await ensurePoliticiansTable();
+      const params = [];
+      let idx = 1;
+      let whereSql = '';
+      if (req.tenant) {
+        whereSql = `WHERE tenant_id = $${idx} OR tenant_id IS NULL`;
+        params.push(req.tenant);
+      }
+      const rows = await pool.query(`SELECT slug, name, updated_at FROM politicians ${whereSql}`, params);
+      politicianSlugs = rows.rows.map(r => ({
+        slug: r.slug || generateSlug(r.name),
+        updatedAt: r.updated_at || null,
+      }));
+    } catch (e) {}
+  }
+  if (!politicianSlugs.length) {
+    const data = getData();
+    const all = data.politicians || [];
+    politicianSlugs = all
+      .filter(p => !req.tenant || !p.tenantId || p.tenantId === req.tenant)
+      .map(p => ({
+        slug: p.slug || generateSlug(p.name),
+        updatedAt: p.updatedAt || null,
+      }));
+  }
+  const urls = [];
+  urls.push({ loc: `${baseUrl}/`, changefreq: 'daily', priority: '1.0' });
+  urls.push({ loc: `${baseUrl}/open-data`, changefreq: 'daily', priority: '0.9' });
+  urls.push({ loc: `${baseUrl}/complaints`, changefreq: 'daily', priority: '0.9' });
+  urls.push({ loc: `${baseUrl}/maps`, changefreq: 'daily', priority: '0.8' });
+  urls.push({ loc: `${baseUrl}/games`, changefreq: 'weekly', priority: '0.6' });
+  urls.push({ loc: `${baseUrl}/contact`, changefreq: 'monthly', priority: '0.3' });
+  urls.push({ loc: `${baseUrl}/privacy`, changefreq: 'yearly', priority: '0.2' });
+  urls.push({ loc: `${baseUrl}/terms`, changefreq: 'yearly', priority: '0.2' });
+  urls.push({ loc: `${baseUrl}/rti-guidelines`, changefreq: 'monthly', priority: '0.4' });
+  urls.push({ loc: `${baseUrl}/volunteer`, changefreq: 'weekly', priority: '0.5' });
+  politicianSlugs.forEach(p => {
+    urls.push({
+      loc: `${baseUrl}/politician/${p.slug}`,
+      changefreq: 'daily',
+      priority: '0.9',
+      lastmod: p.updatedAt ? new Date(p.updatedAt).toISOString() : null,
+    });
+  });
+  const xml = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...urls.map(u => {
+      const parts = [
+        `<loc>${escapeXml(u.loc)}</loc>`,
+        `<changefreq>${u.changefreq}</changefreq>`,
+        `<priority>${u.priority}</priority>`,
+      ];
+      if (u.lastmod) {
+        parts.push(`<lastmod>${escapeXml(u.lastmod)}</lastmod>`);
+      }
+      return `<url>${parts.join('')}</url>`;
+    }),
+    '</urlset>',
+  ].join('');
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.send(xml);
+});
+
+app.get('/api/robots.txt', async (req, res) => {
+  const baseUrl = getBaseUrl();
+  const settings = await loadSystemSettings();
+  const allowIndexing = settings.seo && settings.seo.allowIndexing === false ? false : true;
+  const lines = [];
+  if (!allowIndexing) {
+    lines.push('User-agent: *');
+    lines.push('Disallow: /');
+  } else {
+    lines.push('User-agent: *');
+    lines.push('Allow: /');
+  }
+  lines.push(`Sitemap: ${baseUrl}/sitemap.xml`);
+  res.type('text/plain; charset=utf-8').send(lines.join('\n'));
+});
 
 /**
  * Image Proxy to bypass CORS/ORB
@@ -1465,6 +1610,299 @@ app.get('/api/fetch-real-data', async (req, res) => {
   }
 });
 
+app.get('/api/llm/politician/:slug', async (req, res) => {
+  const slug = req.params.slug;
+  if (!slug) {
+    res.status(400).json({ error: 'Slug is required' });
+    return;
+  }
+  let record = null;
+  if (pool) {
+    try {
+      await ensurePoliticiansTable();
+      const params = [slug];
+      let where = 'slug = $1';
+      if (req.tenant) {
+        params.push(req.tenant);
+        where += ' AND (tenant_id = $2 OR tenant_id IS NULL)';
+      }
+      const rows = await pool.query(`SELECT * FROM politicians WHERE ${where} LIMIT 1`, params);
+      if (rows.rows[0]) {
+        record = rows.rows[0];
+      }
+    } catch (e) {}
+  }
+  if (!record) {
+    const data = getData();
+    const list = data.politicians || [];
+    const found = list.find(p => {
+      const slugValue = p.slug || generateSlug(p.name);
+      if (slugValue !== slug) return false;
+      if (req.tenant && p.tenantId && p.tenantId !== req.tenant) return false;
+      return true;
+    });
+    if (found) {
+      record = {
+        id: found.id,
+        name: found.name,
+        party: found.party,
+        state: found.state,
+        constituency: found.constituency,
+        role: found.role || 'elected',
+        approval_rating: found.approvalRating,
+        total_assets: found.totalAssets,
+        criminal_cases: found.criminalCases,
+        attendance: found.attendance,
+        votes_up: found.votes?.up || found.votesUp || 0,
+        votes_down: found.votes?.down || found.votesDown || 0,
+        created_at: found.createdAt,
+        updated_at: found.updatedAt,
+      };
+    }
+  }
+  if (!record) {
+    res.status(404).json({ error: 'Politician not found' });
+    return;
+  }
+  const payload = {
+    id: record.id,
+    name: record.name,
+    party: record.party,
+    state: record.state,
+    constituency: record.constituency,
+    role: record.role || 'elected',
+    approval_rating: typeof record.approval_rating === 'number' ? record.approval_rating : null,
+    total_assets: typeof record.total_assets === 'number' ? record.total_assets : null,
+    criminal_cases: typeof record.criminal_cases === 'number' ? record.criminal_cases : null,
+    attendance: typeof record.attendance === 'number' ? record.attendance : null,
+    votes: {
+      up: typeof record.votes_up === 'number' ? record.votes_up : 0,
+      down: typeof record.votes_down === 'number' ? record.votes_down : 0,
+    },
+    last_updated: record.updated_at || record.created_at || null,
+  };
+  res.json(payload);
+});
+
+app.get('/api/og/politician/:slug', async (req, res) => {
+  const slug = req.params.slug;
+  if (!slug) {
+    res.status(400).send('Slug is required');
+    return;
+  }
+  let record = null;
+  if (pool) {
+    try {
+      await ensurePoliticiansTable();
+      const params = [slug];
+      let where = 'slug = $1';
+      if (req.tenant) {
+        params.push(req.tenant);
+        where += ' AND (tenant_id = $2 OR tenant_id IS NULL)';
+      }
+      const rows = await pool.query(`SELECT * FROM politicians WHERE ${where} LIMIT 1`, params);
+      if (rows.rows[0]) {
+        record = rows.rows[0];
+      }
+    } catch (e) {}
+  }
+  if (!record) {
+    const data = getData();
+    const list = data.politicians || [];
+    const found = list.find(p => {
+      const slugValue = p.slug || generateSlug(p.name);
+      if (slugValue !== slug) return false;
+      if (req.tenant && p.tenantId && p.tenantId !== req.tenant) return false;
+      return true;
+    });
+    if (found) {
+      record = {
+        name: found.name,
+        party: found.party,
+        state: found.state,
+        constituency: found.constituency,
+        approval_rating: found.approvalRating,
+        total_assets: found.totalAssets,
+        criminal_cases: found.criminalCases,
+        attendance: found.attendance,
+        votes_up: found.votes?.up || found.votesUp || 0,
+        votes_down: found.votes?.down || found.votesDown || 0,
+      };
+    }
+  }
+  if (!record) {
+    res.status(404).send('Not found');
+    return;
+  }
+  const baseUrl = getBaseUrl();
+  const title = record.name;
+  const subtitle = record.party ? `${record.party} • ${record.state || ''}`.trim() : record.state || '';
+  const score =
+    typeof record.approval_rating === 'number' && !Number.isNaN(record.approval_rating)
+      ? Math.round(record.approval_rating)
+      : null;
+  const votesUp = typeof record.votes_up === 'number' ? record.votes_up : 0;
+  const votesDown = typeof record.votes_down === 'number' ? record.votes_down : 0;
+  const response = new ImageResponse(
+    (
+      <div
+        style={{
+          width: '1200px',
+          height: '630px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          background: '#020617',
+          color: '#f9fafb',
+          padding: '64px 72px',
+          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '32px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '70%' }}>
+            <div style={{ fontSize: '18px', textTransform: 'uppercase', letterSpacing: '0.16em', color: '#38bdf8' }}>
+              Neta • Public Ledger
+            </div>
+            <div style={{ fontSize: '52px', fontWeight: 800, lineHeight: 1.05 }}>{title}</div>
+            {subtitle && (
+              <div style={{ fontSize: '26px', color: '#e5e7eb', marginTop: '4px' }}>
+                {subtitle}
+              </div>
+            )}
+          </div>
+          <div
+            style={{
+              borderRadius: '999px',
+              background: 'rgba(15,118,110,0.16)',
+              padding: '10px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              border: '1px solid rgba(45,212,191,0.6)',
+            }}
+          >
+            <div
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '999px',
+                background: '#22c55e',
+              }}
+            />
+            <div style={{ fontSize: '18px', fontWeight: 600 }}>Live sentiment</div>
+            <div style={{ fontSize: '18px', color: '#a5b4fc' }}>
+              {votesUp} up • {votesDown} down
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', gap: '18px', fontSize: '18px', color: '#9ca3af' }}>
+              {typeof record.total_assets === 'number' && (
+                <span>Assets ₹{Math.round(record.total_assets).toLocaleString('en-IN')}</span>
+              )}
+              {typeof record.criminal_cases === 'number' && <span>Cases {record.criminal_cases}</span>}
+              {typeof record.attendance === 'number' && <span>Attendance {Math.round(record.attendance)}%</span>}
+            </div>
+            <div style={{ fontSize: '18px', color: '#6b7280' }}>{baseUrl.replace(/^https?:\/\//, '')}</div>
+          </div>
+          {score !== null && (
+            <div
+              style={{
+                width: '120px',
+                height: '120px',
+                borderRadius: '999px',
+                border: '8px solid rgba(34,197,94,0.9)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background:
+                  'radial-gradient(circle at 30% 30%, rgba(74,222,128,0.4), transparent 60%), #020617',
+              }}
+            >
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '38px', fontWeight: 800 }}>{score}</div>
+                <div style={{ fontSize: '16px', color: '#d1d5db' }}>Approval</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    ),
+    {
+      width: 1200,
+      height: 630,
+    }
+  );
+  const arrayBuffer = await response.arrayBuffer();
+  res.setHeader('Content-Type', 'image/png');
+  res.send(Buffer.from(arrayBuffer));
+});
+
+app.post('/api/performance-log', async (req, res) => {
+  if (!pool) {
+    res.status(204).end();
+    return;
+  }
+  try {
+    await ensurePerformanceLogsTable();
+    const tenantId = req.tenant || null;
+    const { name, value, rating, delta, id, navigationType } = req.body || {};
+    if (!name || typeof value !== 'number') {
+      res.status(204).end();
+      return;
+    }
+    await pool.query(
+      `INSERT INTO performance_logs (tenant_id, metric_name, value, rating, delta, metric_id, navigation_type, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+      [tenantId, name, value, rating || null, typeof delta === 'number' ? delta : null, id || null, navigationType || null]
+    );
+  } catch (e) {}
+  res.status(204).end();
+});
+
+app.get('/api/admin/performance-summary', verifyToken, requireRole('superadmin', 'developer'), async (req, res) => {
+  if (!pool) {
+    res.json({ metrics: [], hasData: false });
+    return;
+  }
+  try {
+    await ensurePerformanceLogsTable();
+    const tenantId = req.tenant || null;
+    const params = [];
+    let where = 'created_at >= NOW() - INTERVAL \'24 hours\'';
+    if (tenantId) {
+      where += ' AND (tenant_id = $1 OR tenant_id IS NULL)';
+      params.push(tenantId);
+    }
+    const sqlText = `
+      SELECT metric_name,
+             COUNT(*) AS samples,
+             AVG(value)::float AS avg_value,
+             PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY value)::float AS p50,
+             PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY value)::float AS p90,
+             PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY value)::float AS p99
+      FROM performance_logs
+      WHERE ${where}
+      GROUP BY metric_name
+    `;
+    const result = await pool.query(sqlText, params);
+    res.json({
+      metrics: result.rows.map(r => ({
+        name: r.metric_name,
+        samples: Number(r.samples) || 0,
+        avg: r.avg_value,
+        p50: r.p50,
+        p90: r.p90,
+        p99: r.p99,
+      })),
+      hasData: result.rows.length > 0,
+    });
+  } catch (e) {
+    res.json({ metrics: [], hasData: false });
+  }
+});
+
 if (!process.env.JWT_SECRET) {
   console.error('[Auth] ERROR: JWT_SECRET must be set in environment. Refusing to start.');
   process.exit(1);
@@ -1824,6 +2262,79 @@ app.get('/api/admin/stats', verifyToken, requireRole('superadmin', 'developer'),
   };
 
   res.json(response);
+});
+
+app.get('/open-data.json', async (req, res) => {
+  const tenantId = req.tenant || null;
+  let politicians = [];
+  let complaints = [];
+  if (pool) {
+    try {
+      await ensurePoliticiansTable();
+      await ensureComplaintsTable();
+      const tenantParam = tenantId ? [tenantId] : [];
+      const whereSql = tenantId ? 'WHERE tenant_id = $1 OR tenant_id IS NULL' : '';
+      const polRes = await pool.query(
+        `SELECT id, name, slug, party, state, constituency, approval_rating, total_assets, criminal_cases, attendance, votes_up, votes_down FROM politicians ${whereSql}`,
+        tenantParam
+      );
+      politicians = polRes.rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        slug: r.slug || generateSlug(r.name),
+        party: r.party,
+        state: r.state,
+        constituency: r.constituency,
+        approval_rating: r.approval_rating,
+        total_assets: r.total_assets,
+        criminal_cases: r.criminal_cases,
+        attendance: r.attendance,
+        votes: {
+          up: r.votes_up || 0,
+          down: r.votes_down || 0,
+        },
+      }));
+      const compRes = await pool.query(
+        `SELECT id, politician_id, category, status, filed_at FROM complaints ${whereSql}`,
+        tenantParam
+      );
+      complaints = compRes.rows;
+    } catch (e) {}
+  }
+  if (!politicians.length) {
+    const data = getData();
+    const all = data.politicians || [];
+    politicians = all
+      .filter(p => !tenantId || !p.tenantId || p.tenantId === tenantId)
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        slug: p.slug || generateSlug(p.name),
+        party: p.party,
+        state: p.state,
+        constituency: p.constituency,
+        approval_rating: p.approvalRating,
+        total_assets: p.totalAssets,
+        criminal_cases: p.criminalCases,
+        attendance: p.attendance,
+        votes: p.votes || { up: p.votesUp || 0, down: p.votesDown || 0 },
+      }));
+    const allComplaints = data.complaints || [];
+    complaints = allComplaints.filter(c => !tenantId || !c.tenantId || c.tenantId === tenantId).map(c => ({
+      id: c.id,
+      politician_id: c.politicianId,
+      category: c.category,
+      status: c.status,
+      filed_at: c.filedAt,
+    }));
+  }
+  res.json({
+    source: 'neta-open-data',
+    tenant: tenantId,
+    politicians,
+    complaints,
+    generated_at: new Date().toISOString(),
+  });
 });
 
 app.post('/api/ai/chat', verifyToken, requireRole('superadmin'), aiLimiter, async (req, res) => {

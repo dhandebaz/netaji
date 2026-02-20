@@ -145,6 +145,18 @@ export const grievances = pgTable('grievances', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const performanceLogs = pgTable('performance_logs', {
+  id: serial('id').primaryKey(),
+  tenantId: text('tenant_id'),
+  metricName: text('metric_name').notNull(),
+  value: real('value').notNull(),
+  rating: text('rating'),
+  delta: real('delta'),
+  metricId: text('metric_id'),
+  navigationType: text('navigation_type'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 export const politiciansRelations = relations(politicians, ({ many }) => ({
   votes: many(votes),
   complaints: many(complaints),
@@ -178,6 +190,8 @@ export type Vote = typeof votes.$inferSelect;
 export type InsertVote = typeof votes.$inferInsert;
 export type Complaint = typeof complaints.$inferSelect;
 export type InsertComplaint = typeof complaints.$inferInsert;
+export type PerformanceLog = typeof performanceLogs.$inferSelect;
+export type InsertPerformanceLog = typeof performanceLogs.$inferInsert;
 export type Volunteer = typeof volunteers.$inferSelect;
 export type InsertVolunteer = typeof volunteers.$inferInsert;
 export type RTITask = typeof rtiTasks.$inferSelect;

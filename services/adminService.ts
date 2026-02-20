@@ -171,6 +171,12 @@ const DEFAULT_SETTINGS: SystemSettings = {
         yearly: 49999,
         currency: '₹'
     },
+    seo: {
+        defaultTitle: 'Neta – Know Your Leader',
+        defaultDescription: 'Citizen dashboard for MPs and MLAs with verified criminal records, assets, RTI impact, and open data APIs.',
+        defaultOgImage: 'https://neta.ink/og-default.png',
+        allowIndexing: true
+    },
     gateways: [
         { provider: 'razorpay', enabled: false, apiKey: '', apiSecret: '', mode: 'sandbox' },
         { provider: 'payu', enabled: false, apiKey: '', apiSecret: '', mode: 'sandbox' },
@@ -207,6 +213,7 @@ export const getSystemSettings = (): SystemSettings => {
             features: { ...DEFAULT_SETTINGS.features, ...parsed.features },
             security: { ...DEFAULT_SETTINGS.security, ...parsed.security },
             billing: { ...DEFAULT_SETTINGS.billing, ...parsed.billing },
+            seo: { ...DEFAULT_SETTINGS.seo, ...(parsed.seo || {}) },
             gateways: parsed.gateways || DEFAULT_SETTINGS.gateways
         };
     } catch {

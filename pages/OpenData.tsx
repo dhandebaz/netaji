@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Database, FileJson, FileSpreadsheet, Terminal, Copy, Check, Shield, Globe, ExternalLink, Search, Lock, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { Helmet } from 'react-helmet-async';
 
 const OpenData: React.FC = () => {
   const { user } = useAuth();
@@ -19,6 +20,20 @@ const OpenData: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans pt-28 pb-20 px-4 md:px-8">
+      <Helmet>
+        <title>Open Data – Public Transparency Hub | Neta</title>
+        <meta
+          name="description"
+          content="Download structured datasets and use APIs for Indian political data, assets, criminal cases, and RTI responses."
+        />
+        <link rel="canonical" href="https://neta.ink/open-data" />
+        <meta property="og:title" content="Open Data – Public Transparency Hub | Neta" />
+        <meta
+          property="og:description"
+          content="Access cleaned, verified, and structured open data on Indian politics, built for journalists and civic hackers."
+        />
+        <meta property="og:url" content="https://neta.ink/open-data" />
+      </Helmet>
       
       {/* HERO */}
       <section className="max-w-7xl mx-auto mb-16 text-center">

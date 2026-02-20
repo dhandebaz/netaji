@@ -1,8 +1,43 @@
 {
   "rewrites": [
     {
+      "source": "/sitemap.xml",
+      "destination": "https://api.neta.ink/api/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "https://api.neta.ink/api/robots.txt"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://api.neta.ink/api/$1"
+    },
+    {
+      "source": "/((?!api).*)",
+      "destination": "/"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains; preload"
+        }
+      ]
     }
   ]
 }
