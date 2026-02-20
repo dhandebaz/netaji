@@ -25,12 +25,15 @@ const Login: React.FC = () => {
   const [pricing, setPricing] = useState(getDeveloperPricing());
 
   useEffect(() => {
-    // If ?tab=signup is present, default to signup mode
     if (searchParams.get('tab') === 'signup') {
-        setAuthMode('signup');
+      setAuthMode('signup');
     }
-    
-    // Redirect if already logged in
+    const adminFlag = searchParams.get('admin');
+    if (adminFlag && ['1', 'true', 'yes'].includes(adminFlag.toLowerCase())) {
+      setSelectedRole('superadmin');
+      setAuthMode('login');
+      setStep('auth-form');
+    }
     if (user) {
       if (user.role === 'superadmin') navigate('/superadmin');
       else if (user.role === 'developer') navigate('/developer');

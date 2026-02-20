@@ -50,7 +50,7 @@ const ContactUs: React.FC = () => {
                             <div className="p-3 bg-white/10 rounded-xl"><Mail size={20}/></div>
                             <div>
                                 <p className="text-xs font-bold text-slate-400 uppercase mb-1">General Inquiries</p>
-                                <p className="font-medium">hello@neta.app</p>
+                                <p className="font-medium">hello@neta.ink</p>
                             </div>
                         </div>
                         <div className="flex items-start gap-4">

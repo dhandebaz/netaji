@@ -1473,9 +1473,9 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRY = '24h';
 
 const ADMIN_USERS = {
-  'admin@neta.app': { passwordHash: bcrypt.hashSync('admin123', 10), role: 'superadmin', name: 'Super Admin' },
-  'dev@neta.app': { passwordHash: bcrypt.hashSync('dev123', 10), role: 'developer', name: 'Developer' },
-  'volunteer@neta.app': { passwordHash: bcrypt.hashSync('vol123', 10), role: 'volunteer', name: 'Volunteer User' }
+  'admin@neta.ink': { passwordHash: bcrypt.hashSync('admin123', 10), role: 'superadmin', name: 'Super Admin' },
+  'dev@neta.ink': { passwordHash: bcrypt.hashSync('dev123', 10), role: 'developer', name: 'Developer' },
+  'volunteer@neta.ink': { passwordHash: bcrypt.hashSync('vol123', 10), role: 'volunteer', name: 'Volunteer User' }
 };
 
 const DEMO_PASSWORDS = {
@@ -1894,6 +1894,63 @@ app.post('/api/admin/run-scraper', verifyToken, requireRole('superadmin'), async
   await runRealPoliticianRefresh(req, res);
 });
 
+const resolveSupportEmail = () => {
+  try {
+    const data = getData();
+    const settings = data.settings || {};
+    const general = settings.general || {};
+    if (general.supportEmail) {
+      return general.supportEmail;
+    }
+  } catch (e) {
+    console.warn('[Mail] Failed to read supportEmail from settings', e);
+  }
+  return process.env.SUPPORT_EMAIL || 'help@neta.ink';
+};
+
+const sendGrievanceEmail = async ({ id, name, email, subject, message }) => {
+  const token = process.env.MAILTRAP_API_TOKEN || process.env.MAILTRAP_SEND_API_TOKEN;
+  if (!token) {
+    console.warn('[Mail] Mailtrap API token not configured; skipping email send');
+    return;
+  }
+  if (typeof fetch === 'undefined') {
+    console.warn('[Mail] fetch is not available; skipping email send');
+    return;
+  }
+  const toEmail = resolveSupportEmail();
+  const payload = {
+    from: {
+      email: process.env.MAILTRAP_FROM_EMAIL || 'hello@neta.ink',
+      name: process.env.MAILTRAP_FROM_NAME || 'Neta Support'
+    },
+    to: [
+      {
+        email: toEmail
+      }
+    ],
+    subject: `[Neta] New Support Ticket: ${subject}`,
+    text: `Ticket ID: ${id}\nFrom: ${name} <${email}>\n\n${message}`,
+    category: 'support-ticket'
+  };
+  try {
+    const resp = await fetch('https://send.api.mailtrap.io/api/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) {
+      const bodyText = await resp.text();
+      console.warn('[Mail] Mailtrap send failed', resp.status, bodyText);
+    }
+  } catch (err) {
+    console.error('[Mail] Error sending Mailtrap email', err);
+  }
+};
+
 app.post('/api/grievances', async (req, res) => {
   if (!pool) {
     return res.status(503).json({ success: false, error: 'support_channel_unavailable' });
@@ -1912,6 +1969,7 @@ app.post('/api/grievances', async (req, res) => {
       [id, tenantId, name, email, subject, message]
     );
     logAudit(email, name, 'CREATE_GRIEVANCE', 'grievance', id, { tenantId, subject }, req);
+    await sendGrievanceEmail({ id, name, email, subject, message });
     res.json({
       success: true,
       data: {

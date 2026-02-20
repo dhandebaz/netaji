@@ -50,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (role: UserRole, email?: string, password?: string): Promise<boolean> => {
     try {
-      const loginEmail = email || `${role}@neta.app`;
+      const loginEmail = email || `${role}@neta.ink`;
       const loginPassword = password || '';
       const response = await api.login(loginEmail, loginPassword, role);
       return applySession(response);

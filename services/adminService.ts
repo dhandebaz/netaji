@@ -121,7 +121,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
         siteName: 'Neta',
         maintenanceMode: false,
         allowSignups: true,
-        supportEmail: 'help@neta.app',
+        supportEmail: 'help@neta.ink',
         systemVersion: '3.1.0',
         timezone: 'Asia/Kolkata',
         translation: {

@@ -187,7 +187,7 @@ const AdminVolunteers: React.FC = () => {
                             <div className="space-y-3">
                                 <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:bg-slate-50">
                                     <Mail className="text-slate-400" size={18} />
-                                    <span className="text-sm font-medium text-slate-600">volunteer.{selectedVolunteer.id}@neta.app</span>
+                                    <span className="text-sm font-medium text-slate-600">volunteer.{selectedVolunteer.id}@neta.ink</span>
                                 </div>
                                 <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:bg-slate-50">
                                     <Phone className="text-slate-400" size={18} />

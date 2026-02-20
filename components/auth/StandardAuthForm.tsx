@@ -75,7 +75,7 @@ const StandardAuthForm: React.FC<Props> = ({ mode, role, onToggleMode, onBack })
                             value={email}
                             onChange={e => setEmail(e.target.value)}
                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                            placeholder={`${role}@neta.app`}
+                            placeholder={role === 'superadmin' ? 'admin@neta.ink' : `${role}@neta.ink`}
                         />
                     </div>
                     <div>
