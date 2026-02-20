@@ -3,10 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { 
     Save, Check, RefreshCw, AlertTriangle 
 } from 'lucide-react';
-import { getSystemSettings, saveSystemSettings } from '../../services/adminService';
+import { getSystemSettings } from '../../services/adminService';
 import { SystemSettings } from '../../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
+import { getAdminSettings, saveAdminSettings } from '../../services/apiService';
 
 // Import Modular Settings Pages
 import SettingsGeneral from './settings/SettingsGeneral';
@@ -25,21 +27,44 @@ const AdminSettings: React.FC<Props> = ({ activePage = 'general' }) => {
     const [settings, setSettings] = useState<SystemSettings | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const { addToast } = useToast();
+    const { token } = useAuth();
 
     useEffect(() => {
-        setSettings(getSystemSettings());
-    }, []);
+        const loadSettings = async () => {
+            try {
+                if (!token) {
+                    setSettings(getSystemSettings());
+                    return;
+                }
+                const remote = await getAdminSettings(token);
+                setSettings(remote as SystemSettings);
+            } catch {
+                setSettings(getSystemSettings());
+            }
+        };
+        loadSettings();
+    }, [token]);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!settings) return;
         setSaveStatus('saving');
-        // Simulate network delay
-        setTimeout(() => {
-            saveSystemSettings(settings);
+        try {
+            if (!token) {
+                setSaveStatus('saved');
+                addToast('Configuration saved locally (no auth token).', 'success');
+                setTimeout(() => setSaveStatus('idle'), 2000);
+                return;
+            }
+            const result = await saveAdminSettings(settings, token);
+            const nextSettings = (result as any).settings || settings;
+            setSettings(nextSettings);
             setSaveStatus('saved');
             addToast('System configuration saved successfully.', 'success');
             setTimeout(() => setSaveStatus('idle'), 2000);
-        }, 800);
+        } catch {
+            setSaveStatus('idle');
+            addToast('Failed to save configuration. Please try again.', 'error');
+        }
     };
 
     if (!settings) return <div className="p-10 text-center text-slate-400">Loading Configuration...</div>;

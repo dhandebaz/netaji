@@ -1,4 +1,4 @@
-import { Politician, NewsItem, PublicComplaint, Volunteer, RTITask, VoteTransaction } from '../types';
+import { Politician, NewsItem, PublicComplaint, Volunteer, RTITask } from '../types';
 import { MOCK_POLITICIANS, STATES } from '../constants';
 import { fetchNewsForPolitician } from './rssService';
 import { fetchRealPoliticiansFromMyNeta } from './mynetaService';
@@ -37,6 +37,7 @@ export const dataSyncEvents = {
 
 const STORAGE_KEYS = {
   POLITICIANS: 'neta_politicians',
+  CONST_INTEL: 'neta_constituency_intel',
   COMPLAINTS: 'neta_complaints',
   VOLUNTEERS: 'neta_volunteers',
   RTI_TASKS: 'neta_rti_tasks',
@@ -183,9 +184,11 @@ export const syncVolunteers = async () => {
 export const fetchRealDataFromBackend = async (state: string = 'Delhi'): Promise<boolean> => {
   try {
     const API_URL = getAPI_URL();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('neta_auth_token') : null;
     console.debug(`[dataService] Fetching politicians from ${state}...`);
-    const res = await fetch(`${API_URL}/admin/run-scraper?state=${state}`, {  
+    const res = await fetch(`${API_URL}/admin/run-scraper?state=${encodeURIComponent(state)}&strict=1`, {  
       method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
       signal: AbortSignal.timeout(10000) 
     });
     if (res.ok) {
@@ -239,6 +242,14 @@ export const getAllPoliticians = (): Politician[] => {
   const withSlugs = stored.map(ensureSlug);
   politicianCache = withSlugs;
   return withSlugs;
+};
+
+export const getConstituencyIntelByState = (state: string) => {
+  const politicians = getPoliticiansByState(state);
+  const total = politicians.length;
+  const verified = politicians.filter(p => p.verified).length;
+  const avgApproval = total > 0 ? Math.round(politicians.reduce((sum, p) => sum + (p.approvalRating || 0), 0) / total) : 0;
+  return { total, verified, avgApproval };
 };
 
 export const getPoliticianById = (id: number): Politician | undefined => {

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Users, FileText, CheckCircle, Activity, ArrowUpRight, Clock, MapPin, AlertTriangle, Zap, Link, Box, MessageSquare, Database } from 'lucide-react';
+import { Users, FileText, CheckCircle, Activity, ArrowUpRight, Clock, MapPin, AlertTriangle, Zap, Link, Box, MessageSquare, Database, Cpu } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { getAllRTITasks, getAllComplaints, dataSyncEvents } from '../../services/dataService';
 import { getAdminStats } from '../../services/apiService';
@@ -84,6 +84,9 @@ const AdminDashboard: React.FC = () => {
   ];
 
   const activeComplaints = stats ? stats.pendingComplaints : complaints.filter(c => c.status === 'pending').length;
+  const totalVotes = stats?.votes ?? (stats?.db?.votes ?? 0);
+  const politicianCount = stats?.politicians ?? (stats?.db?.politicians ?? 0);
+  const complaintsCount = stats?.complaints ?? (stats?.db?.complaints ?? 0);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -135,18 +138,37 @@ const AdminDashboard: React.FC = () => {
           value={stats?.db?.connected ? 'Online' : 'Offline'}
           subValue={
             stats?.db?.connected
-              ? `${(stats.db.politicians ?? 0).toLocaleString()} politicians`
+              ? (() => {
+                  const count = (stats.db.politicians ?? 0).toLocaleString();
+                  const meta = stats.db.scraper;
+                  if (!meta || !meta.lastRunAt) {
+                    return `${count} politicians`;
+                  }
+                  const sourceLabel = meta.lastSource === 'live' ? 'live MyNeta' : 'fallback';
+                  const stateLabel = meta.lastState && meta.lastState !== 'all' ? meta.lastState : 'All';
+                  return `${count} • last ${new Date(meta.lastRunAt).toLocaleString()} • ${stateLabel} • ${sourceLabel}`;
+                })()
               : 'File storage active'
           }
           color={stats?.db?.connected ? 'emerald' : 'orange'}
           alert={!stats?.db?.connected}
+        />
+        <StatCard
+          icon={<Cpu className="text-slate-700" size={24} />}
+          label="Frontend Build"
+          value={stats?.build?.codeSplit ? 'Optimized' : 'Default'}
+          subValue={
+            stats?.build
+              ? `Chunks ≤ ${stats.build.chunkSizeWarningLimit}kb • ${Array.isArray(stats.build.manualChunks) ? stats.build.manualChunks.join(', ') : ''}`
+              : 'No build metadata'
+          }
+          color="slate"
         />
       </div>
 
       {/* Main Visualization Layer */}
       <div className="grid lg:grid-cols-3 gap-6">
         
-        {/* Traffic Chart */}
         <div className="lg:col-span-2 bg-white p-6 rounded-[24px] shadow-sm border border-slate-200 flex flex-col">
            <div className="flex justify-between items-center mb-6">
              <div>
@@ -182,9 +204,50 @@ const AdminDashboard: React.FC = () => {
            </div>
         </div>
 
-        {/* Alerts Column */}
         <div className="flex flex-col gap-6">
-            {/* Live Log */}
+            <div className="bg-white p-5 rounded-[24px] shadow-sm border border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.18em]">Digital Mandate Snapshot</p>
+                        <p className="text-sm text-slate-500">Internal sentiment from votes, complaints, and coverage.</p>
+                    </div>
+                    <div className="flex flex-col items-end text-right">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">Coverage</span>
+                        <span className="text-lg font-black text-slate-900">
+                            {politicianCount.toLocaleString()} leaders
+                        </span>
+                    </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Net Approval</p>
+                        <p className="text-2xl font-black text-emerald-600">
+                            {totalVotes > 0 ? Math.max(0, Math.min(100, Math.round((stats?.users || 0) / (totalVotes || 1)))) : 50}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-medium">Scaled 0–100</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Complaint Pressure</p>
+                        <p className="text-2xl font-black text-orange-600">
+                            {politicianCount > 0 ? Math.round((complaintsCount / politicianCount) * 10) : 0}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-medium">Open issues per 10 leaders</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Engagement Index</p>
+                        <p className="text-2xl font-black text-blue-600">
+                            {trafficData[3]?.users ?? 0}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-medium">Midday active users</p>
+                    </div>
+                </div>
+                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                        className="h-full bg-gradient-to-r from-emerald-500 via-blue-500 to-orange-500"
+                        style={{ width: `${Math.min(100, (politicianCount / 543) * 100 || 0)}%` }}
+                    />
+                </div>
+            </div>
             <div className="bg-slate-900 p-5 rounded-[24px] shadow-xl text-slate-400 font-mono text-xs flex-grow overflow-hidden flex flex-col">
                 <div className="flex justify-between items-center mb-3 pb-3 border-b border-slate-800">
                     <span className="font-bold text-slate-100 flex items-center gap-2"><Activity size={14}/> Live Stream</span>

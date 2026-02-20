@@ -11,6 +11,7 @@ import { getDeveloperPricing } from '../services/adminService';
 import RoleSelection from '../components/auth/RoleSelection';
 import StandardAuthForm from '../components/auth/StandardAuthForm';
 import VoterSignupForm from '../components/auth/VoterSignupForm';
+import PhoneOtpLoginForm from '../components/auth/PhoneOtpLoginForm';
 
 const Login: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -49,11 +50,6 @@ const Login: React.FC = () => {
       if (searchParams.get('tab') === 'signup') setAuthMode('signup');
   };
 
-  // Quick Bypass for demo (Super Admin)
-  const handleDebugLogin = () => {
-    login('superadmin');
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 pt-24 pb-12 px-4 flex items-center justify-center relative overflow-hidden">
       
@@ -80,31 +76,18 @@ const Login: React.FC = () => {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                 >
-                    {/* 
-                        Logic: 
-                        If Role is VOTER and Mode is SIGNUP -> Show VoterSignupForm (ID verification).
-                        Otherwise -> Show StandardAuthForm (Email/Pass).
-                    */}
                     {selectedRole === 'voter' && authMode === 'signup' ? (
-                        <VoterSignupForm onBack={() => setStep('role-selection')} />
+                      <VoterSignupForm onBack={() => setStep('role-selection')} />
+                    ) : selectedRole === 'voter' && authMode === 'login' ? (
+                      <PhoneOtpLoginForm role={selectedRole} onBack={() => setStep('role-selection')} />
                     ) : (
-                        <StandardAuthForm 
-                            mode={authMode}
-                            role={selectedRole}
-                            onToggleMode={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
-                            onBack={() => setStep('role-selection')}
-                        />
+                      <StandardAuthForm
+                        mode={authMode}
+                        role={selectedRole}
+                        onToggleMode={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
+                        onBack={() => setStep('role-selection')}
+                      />
                     )}
-
-                     {/* Debug Backdoor */}
-                     <div className="max-w-md mx-auto mt-8 bg-white/50 backdrop-blur p-4 rounded-xl border border-slate-100 text-center">
-                        <button 
-                            onClick={handleDebugLogin}
-                            className="text-xs font-bold text-slate-400 hover:text-red-500 flex items-center justify-center gap-2 w-full py-1 transition-colors"
-                        >
-                            <AlertTriangle size={12} /> Debug: Enter as SuperAdmin
-                        </button>
-                     </div>
                 </motion.div>
             )}
         </AnimatePresence>

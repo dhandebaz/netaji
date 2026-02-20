@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { STATES } from '../constants';
-import { getAllPoliticians } from '../services/dataService';
+import { getAllPoliticians, getConstituencyIntelByState, fetchRealDataFromBackend } from '../services/dataService';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, BarChart, Bar, Legend
@@ -99,6 +99,7 @@ const ConstituencyMaps: React.FC = () => {
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'demographics' | 'history'>('overview');
   const [downloading, setDownloading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const activePoliticians = useMemo(() => {
     if (!selectedState) return [];
@@ -107,8 +108,28 @@ const ConstituencyMaps: React.FC = () => {
 
   const stats = useMemo(() => {
     if (!selectedState) return null;
-    return FULL_INDIA_DATA[selectedState];
+    const base = FULL_INDIA_DATA[selectedState];
+    const intel = getConstituencyIntelByState(selectedState);
+    return {
+      ...base,
+      approvalFromPlatform: intel.avgApproval,
+      totalLeaders: intel.total,
+      verifiedLeaders: intel.verified,
+    } as StateData & { approvalFromPlatform: number; totalLeaders: number; verifiedLeaders: number };
   }, [selectedState]);
+
+  const handleSync = async () => {
+    if (!selectedState) return;
+    setIsSyncing(true);
+    try {
+      const ok = await fetchRealDataFromBackend(selectedState);
+      if (!ok) {
+        console.warn('[ConstituencyMaps] Intel refresh failed or returned no live data');
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleDownloadReport = () => {
     if (!stats) return;
@@ -178,6 +199,14 @@ const ConstituencyMaps: React.FC = () => {
                  </select>
                  <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" size={16} />
               </div>
+              <button 
+                type="button"
+                onClick={handleSync}
+                disabled={!selectedState || isSyncing}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed shadow-md hover:bg-slate-800 transition-colors"
+              >
+                {isSyncing ? 'Refreshing…' : 'Refresh Intel'}
+              </button>
               
               {selectedState && (
                   <button 
@@ -277,7 +306,7 @@ const ConstituencyMaps: React.FC = () => {
                             <div className="grid grid-cols-3 gap-3">
                                 <KPIBox label="Proj. Turnout" value={stats.turnout} color="blue" />
                                 <KPIBox label="Winning Odds" value={stats.winningParty} color="purple" />
-                                <KPIBox label="Literacy" value={`${stats.literacy}%`} color="emerald" />
+                                <KPIBox label="Platform Approval" value={`${stats.approvalFromPlatform || 0}%`} color="emerald" />
                             </div>
                         </div>
 

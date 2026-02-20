@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
@@ -9,25 +9,24 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { startAutoRefresh } from './services/dataRefreshScheduler';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import Home from './pages/Home';
-import Login from './pages/Login';
-import PoliticianProfile from './pages/PoliticianProfile';
-import PoliticianRankings from './pages/PoliticianRankings';
-import NyayFauj from './pages/NyayFauj';
-import SuperAdmin from './pages/SuperAdmin';
-import DeveloperConsole from './pages/DeveloperConsole';
-import PoliticianDashboard from './pages/PoliticianDashboard';
-import Compare from './pages/Compare';
-import ConstituencyMaps from './pages/ConstituencyMaps';
-import OpenData from './pages/OpenData';
-import ContactUs from './pages/ContactUs';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import TermsOfService from './pages/TermsOfService';
-import RTIGuidelines from './pages/RTIGuidelines';
-import ElectionAnalytics from './pages/ElectionAnalytics';
-import PublicComplaints from './pages/PublicComplaints';
-import GamesArcade from './pages/GamesArcade';
-import GamePlayer from './pages/GamePlayer';
+const Home = lazy(() => import('./pages/Home'));
+const Login = lazy(() => import('./pages/Login'));
+const PoliticianProfile = lazy(() => import('./pages/PoliticianProfile'));
+const PoliticianRankings = lazy(() => import('./pages/PoliticianRankings'));
+const NyayFauj = lazy(() => import('./pages/NyayFauj'));
+const SuperAdmin = lazy(() => import('./pages/SuperAdmin'));
+const DeveloperConsole = lazy(() => import('./pages/DeveloperConsole'));
+const PoliticianDashboard = lazy(() => import('./pages/PoliticianDashboard'));
+const Compare = lazy(() => import('./pages/Compare'));
+const ConstituencyMaps = lazy(() => import('./pages/ConstituencyMaps'));
+const OpenData = lazy(() => import('./pages/OpenData'));
+const ContactUs = lazy(() => import('./pages/ContactUs'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const RTIGuidelines = lazy(() => import('./pages/RTIGuidelines'));
+const PublicComplaints = lazy(() => import('./pages/PublicComplaints'));
+const GamesArcade = lazy(() => import('./pages/GamesArcade'));
+const GamePlayer = lazy(() => import('./pages/GamePlayer'));
 import { AnimatePresence } from 'framer-motion';
 
 initializeData();
@@ -68,7 +67,6 @@ const AnimatedRoutes = () => {
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/rti-guidelines" element={<RTIGuidelines />} />
-        <Route path="/election-analytics" element={<ElectionAnalytics />} />
         <Route path="/complaints" element={<PublicComplaints />} />
         <Route path="/games" element={<GamesArcade />} />
         <Route path="/games/play/:id" element={<GamePlayer />} />
@@ -87,7 +85,9 @@ const App: React.FC = () => {
           <div className="flex flex-col min-h-screen font-sans text-gray-900 antialiased selection:bg-blue-100 selection:text-blue-900">
             <Navbar />
             <main className="flex-grow">
-              <AnimatedRoutes />
+              <Suspense fallback={<div className="p-6 text-center text-sm text-slate-500">Loading...</div>}>
+                <AnimatedRoutes />
+              </Suspense>
             </main>
             <Footer />
             <AdminDataFetcher />

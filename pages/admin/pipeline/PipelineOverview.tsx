@@ -15,15 +15,18 @@ const PipelineOverview: React.FC<Props> = ({ onNavigate }) => {
   const [isScraperRunning, setIsScraperRunning] = useState(false);
   const [scraperStatus, setScraperStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [scraperMessage, setScraperMessage] = useState('');
-  const [selectedState, setSelectedState] = useState('Delhi');
+  const [selectedState, setSelectedState] = useState('all');
   const [availableStates, setAvailableStates] = useState<Config[]>([]);
 
   useEffect(() => {
-    // Initialize with default source
     setAvailableStates([
-      { key: 'myneta', label: 'MyNeta.info - Real Data' }
+      { key: 'all', label: 'All India – Top Leaders' },
+      { key: 'Uttar Pradesh', label: 'Uttar Pradesh' },
+      { key: 'Delhi', label: 'Delhi' },
+      { key: 'Kerala', label: 'Kerala' },
+      { key: 'West Bengal', label: 'West Bengal' }
     ]);
-    setSelectedState('myneta');
+    setSelectedState('all');
   }, []);
 
   const handleRunScraper = async () => {

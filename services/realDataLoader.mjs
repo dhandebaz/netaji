@@ -126,7 +126,7 @@ export async function fetchOneRealPolitician(candidateId, electionSlug = 'LokSab
 /**
  * Fetch multiple real politicians
  */
-export async function fetchMultipleRealPoliticians(count = 6) {
+export async function fetchMultipleRealPoliticians(count = 6, stateFilter = null) {
   console.log(`[RealDataLoader] Starting to load ${count} real politicians from MyNeta.info...`);
   
   const politicians = [];
@@ -147,13 +147,20 @@ export async function fetchMultipleRealPoliticians(count = 6) {
     }
   }
   
-  if (politicians.length > 0) {
-    console.log(`[RealDataLoader] ✓ Successfully loaded ${politicians.length} real politicians`);
-  } else {
-    console.log(`[RealDataLoader] ⚠ No politicians loaded, returning fallback data`);
+  let finalList = politicians;
+  if (stateFilter && stateFilter !== 'all') {
+    const target = String(stateFilter).toLowerCase();
+    const filtered = politicians.filter(p => (p.state || '').toLowerCase() === target);
+    if (filtered.length > 0) {
+      finalList = filtered;
+    }
   }
-  
-  return politicians;
+  if (finalList.length > 0) {
+    console.log(`[RealDataLoader] ✓ Successfully loaded ${finalList.length} real politicians`);
+  } else {
+    console.log(`[RealDataLoader] ⚠ No politicians loaded`);
+  }
+  return finalList;
 }
 
 /**

@@ -15,7 +15,7 @@ const MYNETA_CONFIGS = {
   'Delhi2025': {
     label: 'Delhi Assembly 2025',
     baseUrl: 'https://myneta.info/Delhi2025',
-    idRange: [1, 50],
+    idRange: [1, 200],
     candidateUrl: (id) => `https://myneta.info/Delhi2025/candidate.php?candidate_id=${id}`
   },
   'Karnataka2023': {
@@ -70,6 +70,8 @@ function parsePoliticianFromHTML(html, candidateId, configKey) {
     
     const politician = {
       id: candidateId,
+      mynetaId: String(candidateId),
+      electionSlug: configKey,
       name: name,
       party: party,
       photoUrl: photoUrl || `https://via.placeholder.com/300?text=${encodeURIComponent(name)}`,
@@ -82,7 +84,8 @@ function parsePoliticianFromHTML(html, candidateId, configKey) {
       approvalRating: Math.floor(Math.random() * 100),
       source: 'MyNeta.info',
       verified: true,
-      status: 'active'
+      status: 'active',
+      role: 'candidate'
     };
     
     console.log(`[MyNetaScraper] ✓ Parsed: ${name} (${party}) - ${criminalCases} cases, ₹${totalAssets}`);
@@ -136,29 +139,36 @@ async function fetchPoliticianFromMyNeta(candidateId, configKey = 'LokSabha2024'
 
 /**
  * Batch fetch multiple politicians from MyNeta
+ * When options.strict === true, never return fallback/sample data
  */
-export async function fetchRealPoliticiansFromMyNeta(configKey = 'LokSabha2024', limit = 6) {
+export async function fetchRealPoliticiansFromMyNeta(configKey = 'LokSabha2024', limit = 6, options = {}) {
+  const strict = !!options.strict;
   console.log(`[MyNetaScraper] Starting scrape for ${configKey}, limit: ${limit}`);
   
   const config = MYNETA_CONFIGS[configKey];
   if (!config) {
-    console.log(`[MyNetaScraper] Config not found, returning sample data`);
-    return generateSamplePoliticians(limit, configKey);
+    console.log(`[MyNetaScraper] Config not found${strict ? ', strict mode - returning empty list' : ', returning sample data'}`);
+    return strict ? [] : generateSamplePoliticians(limit, configKey);
   }
   
   const politicians = [];
-  const sampleIds = [];
   const [min, max] = config.idRange;
   
-  // Sample random IDs to avoid rate limiting
-  for (let i = 0; i < limit; i++) {
-    const randomId = Math.floor(Math.random() * (max - min + 1)) + min;
-    sampleIds.push(randomId);
+  let candidateIds = [];
+  if (configKey === 'Delhi2025') {
+    for (let id = min; id <= max; id++) {
+      candidateIds.push(id);
+    }
+  } else {
+    for (let i = 0; i < limit; i++) {
+      const randomId = Math.floor(Math.random() * (max - min + 1)) + min;
+      candidateIds.push(randomId);
+    }
   }
   
-  console.log(`[MyNetaScraper] Sampling candidates: ${sampleIds.join(', ')}`);
+  console.log(`[MyNetaScraper] Candidate IDs: ${candidateIds.join(', ')}`);
   
-  for (const candidateId of sampleIds) {
+  for (const candidateId of candidateIds) {
     try {
       const politician = await fetchPoliticianFromMyNeta(candidateId, configKey);
       if (politician) {
@@ -166,14 +176,17 @@ export async function fetchRealPoliticiansFromMyNeta(configKey = 'LokSabha2024',
       }
       // Rate limiting - 500ms between requests
       await new Promise(resolve => setTimeout(resolve, 500));
+      if (politicians.length >= limit) {
+        break;
+      }
     } catch (error) {
       console.error(`[MyNetaScraper] Error fetching candidate ${candidateId}:`, error.message);
     }
   }
   
   if (politicians.length === 0) {
-    console.log(`[MyNetaScraper] Scraping returned no results, using fallback data`);
-    return generateSamplePoliticians(limit, configKey);
+    console.log(`[MyNetaScraper] Scraping returned no results${strict ? ' in strict mode - returning empty list' : ', using fallback data'}`);
+    return strict ? [] : generateSamplePoliticians(limit, configKey);
   }
   
   console.log(`[MyNetaScraper] ✓ Successfully scraped ${politicians.length} politicians from ${configKey}`);
@@ -197,6 +210,8 @@ function generateSamplePoliticians(count, configKey) {
   for (let i = 0; i < count; i++) {
     politicians.push({
       id: i + 1,
+      mynetaId: String(i + 1),
+      electionSlug: configKey,
       name: sampleNames[i % sampleNames.length],
       party: sampleParties[i % sampleParties.length],
       photoUrl: `https://via.placeholder.com/300?text=Politician${i+1}`,
@@ -209,7 +224,8 @@ function generateSamplePoliticians(count, configKey) {
       approvalRating: Math.floor(Math.random() * 100),
       source: 'MyNeta.info (Sample)',
       verified: true,
-      status: 'active'
+      status: 'active',
+      role: 'candidate'
     });
   }
   return politicians;

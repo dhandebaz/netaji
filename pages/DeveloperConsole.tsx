@@ -4,16 +4,33 @@ import { Terminal, Key, CreditCard, BarChart3, Copy, Check, Shield, Lock, Chevro
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { getDeveloperPricing } from '../services/adminService';
+import { getAdminSettings } from '../services/apiService';
 
 const DeveloperConsole: React.FC = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
   const [pricing, setPricing] = useState(getDeveloperPricing());
 
   useEffect(() => {
-      setPricing(getDeveloperPricing());
-  }, []);
+      const loadPricing = async () => {
+        try {
+          if (!token) {
+            setPricing(getDeveloperPricing());
+            return;
+          }
+          const settings = await getAdminSettings(token);
+          if ((settings as any).billing) {
+            setPricing((settings as any).billing);
+            return;
+          }
+          setPricing(getDeveloperPricing());
+        } catch {
+          setPricing(getDeveloperPricing());
+        }
+      };
+      loadPricing();
+  }, [token]);
 
   const handleCopy = () => {
     if (user?.apiKey) {

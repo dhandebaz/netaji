@@ -5,6 +5,8 @@ import { Politician } from '../types';
 import { extractVoterIdFromImage, isAIAvailable } from '../services/geminiService';
 import { recordVote, hasUserVoted } from '../services/dataService';
 import { recordVoteOnChain } from '../services/blockchainService';
+import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+import { firebaseAuth } from '../services/firebaseClient';
 
 interface Props {
   isOpen: boolean;
@@ -19,6 +21,10 @@ const VoteModal: React.FC<Props> = ({ isOpen, onClose, politician, voteType }) =
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,22 +63,67 @@ const VoteModal: React.FC<Props> = ({ isOpen, onClose, politician, voteType }) =
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     if (voterId.length < 5 || phone.length < 10) {
       alert("Please enter valid details");
       return;
     }
-    setStep(3);
+    if (!firebaseAuth) {
+      alert("OTP service is not configured. Please contact support.");
+      return;
+    }
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 10) {
+      alert("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    setIsSendingOtp(true);
+    setOtpError(null);
+    try {
+      let verifier: RecaptchaVerifier;
+      if (!(window as any).voteOtpRecaptchaVerifier) {
+        verifier = new RecaptchaVerifier(
+          'vote-otp-recaptcha',
+          { size: 'invisible' },
+          firebaseAuth
+        );
+        (window as any).voteOtpRecaptchaVerifier = verifier;
+      } else {
+        verifier = (window as any).voteOtpRecaptchaVerifier;
+      }
+      const result = await signInWithPhoneNumber(
+        firebaseAuth,
+        `+91${digits}`,
+        verifier
+      );
+      setConfirmation(result);
+      setStep(3);
+    } catch (err) {
+      console.error('[Vote OTP] Failed to send OTP', err);
+      setOtpError('Could not send OTP. Please try again.');
+    } finally {
+      setIsSendingOtp(false);
+    }
   };
 
-  const handleOtpSubmit = () => {
-    if (otp.length === 6) {
+  const handleOtpSubmit = async () => {
+    if (!confirmation) {
+      setOtpError('Please request an OTP first.');
+      return;
+    }
+    if (otp.length < 6) {
+      setOtpError('Please enter the 6-digit OTP sent to your phone.');
+      return;
+    }
+    setIsVerifyingOtp(true);
+    setOtpError(null);
+    try {
+      await confirmation.confirm(otp);
       const existingVote = hasUserVoted(politician.id);
       if (existingVote) {
         alert(`You have already voted ${existingVote === 'up' ? 'for' : 'against'} this politician. Each voter can only vote once per politician.`);
         return;
       }
-      
       const result = recordVote(politician.id, voteType);
       if (result.success) {
         try {
@@ -84,8 +135,11 @@ const VoteModal: React.FC<Props> = ({ isOpen, onClose, politician, voteType }) =
       } else {
         alert("Failed to record your vote. Please try again.");
       }
-    } else {
-      alert("Please enter the 6-digit OTP sent to your phone.");
+    } catch (err) {
+      console.error('[Vote OTP] Verification failed', err);
+      setOtpError('Invalid or expired OTP. Please try again.');
+    } finally {
+      setIsVerifyingOtp(false);
     }
   };
 
@@ -221,7 +275,9 @@ const VoteModal: React.FC<Props> = ({ isOpen, onClose, politician, voteType }) =
                   </div>
                   <h4 className="text-xl font-bold text-gray-800">Enter OTP</h4>
                   <p className="text-sm text-gray-500 mt-1">We sent a code to +91 {phone}</p>
-                  <p className="text-xs font-mono text-gray-400 mt-1">(Mock: Enter any 6 digits)</p>
+                  {otpError && (
+                    <p className="text-xs text-red-500 mt-1">{otpError}</p>
+                  )}
                 </div>
 
                 <input 
@@ -235,9 +291,10 @@ const VoteModal: React.FC<Props> = ({ isOpen, onClose, politician, voteType }) =
 
                 <button 
                   onClick={handleOtpSubmit}
-                  className={`w-full py-3 rounded-xl font-bold transition-colors shadow-lg mt-4 ${voteType === 'up' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
+                  disabled={isVerifyingOtp}
+                  className={`w-full py-3 rounded-xl font-bold transition-colors shadow-lg mt-4 disabled:opacity-50 disabled:cursor-not-allowed ${voteType === 'up' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}
                 >
-                  Confirm Vote {voteType === 'up' ? '👍' : '👎'}
+                  {isVerifyingOtp ? 'Verifying...' : `Confirm Vote ${voteType === 'up' ? '👍' : '👎'}`}
                 </button>
               </div>
             )}
@@ -262,6 +319,7 @@ const VoteModal: React.FC<Props> = ({ isOpen, onClose, politician, voteType }) =
               </div>
             )}
           </div>
+          <div id="vote-otp-recaptcha" className="hidden" />
         </motion.div>
       </div>
     </AnimatePresence>

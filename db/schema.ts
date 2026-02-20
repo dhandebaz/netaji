@@ -134,6 +134,17 @@ export const settings = pgTable('settings', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+export const grievances = pgTable('grievances', {
+  id: text('id').primaryKey(),
+  tenantId: text('tenant_id'),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  subject: text('subject').notNull(),
+  message: text('message').notNull(),
+  status: text('status').default('open'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 export const politiciansRelations = relations(politicians, ({ many }) => ({
   votes: many(votes),
   complaints: many(complaints),
@@ -177,3 +188,5 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = typeof auditLogs.$inferInsert;
+export type Grievance = typeof grievances.$inferSelect;
+export type InsertGrievance = typeof grievances.$inferInsert;

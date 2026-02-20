@@ -85,7 +85,7 @@ const StandardAuthForm: React.FC<Props> = ({ mode, role, onToggleMode, onBack })
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                            placeholder="Leave empty for demo login"
+                            placeholder="Enter your password"
                         />
                     </div>
 
@@ -97,12 +97,6 @@ const StandardAuthForm: React.FC<Props> = ({ mode, role, onToggleMode, onBack })
                             </p>
                         </div>
                     )}
-
-                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
-                        <p className="text-xs text-blue-700 font-medium">
-                            Demo: Leave fields empty to login with default {role} credentials
-                        </p>
-                    </div>
 
                     <button 
                         type="submit" 

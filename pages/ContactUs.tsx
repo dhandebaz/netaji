@@ -2,22 +2,23 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, MessageSquare, Send, CheckCircle, MapPin, Phone } from 'lucide-react';
-import { submitGrievance } from '../services/adminService';
+import { submitSupportTicket } from '../services/apiService';
 
 const ContactUs: React.FC = () => {
   const [formData, setFormData] = useState({ name: '', email: '', subject: '', message: '' });
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success'>('idle');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus('submitting');
-    
-    // Simulate network delay
-    setTimeout(() => {
-        submitGrievance(formData);
-        setStatus('success');
-        setFormData({ name: '', email: '', subject: '', message: '' });
-    }, 1500);
+    try {
+      await submitSupportTicket(formData);
+      setStatus('success');
+      setFormData({ name: '', email: '', subject: '', message: '' });
+    } catch {
+      setStatus('idle');
+      alert('Failed to send your message. Please try again.');
+    }
   };
 
   return (

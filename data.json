@@ -7,17 +7,17 @@
       "state": "UTTAR PRADESH",
       "constituency": "VARANASI",
       "photoUrl": "https://myneta.info/images_candidate/mynetai_ews5LokSabha2024/c5661014fbd65ad919773c2b32250a1ca5afb5e5.jpg",
-      "age": 71,
+      "age": 39,
       "education": "BA",
       "totalAssets": 0,
       "criminalCases": 0,
-      "approvalRating": 40,
+      "approvalRating": 10,
       "source": "MyNeta.info",
       "verified": true,
       "status": "active",
       "votes": {
-        "up": 2578,
-        "down": 3792
+        "up": 462,
+        "down": 3632
       },
       "assetsBreakdown": {
         "movable": 0,
@@ -44,17 +44,17 @@
       "state": "PUNJAB",
       "constituency": "GURDASPUR",
       "photoUrl": "https://myneta.info/images_candidate/mynetai_ews5LokSabha2024/b2c406cd1b9fc69d936048eb3537c51aa6f4821b.jpg",
-      "age": 43,
+      "age": 57,
       "education": "BA",
       "totalAssets": 0,
       "criminalCases": 0,
-      "approvalRating": 11,
+      "approvalRating": 28,
       "source": "MyNeta.info",
       "verified": true,
       "status": "active",
       "votes": {
-        "up": 3308,
-        "down": 1181
+        "up": 4553,
+        "down": 2689
       },
       "assetsBreakdown": {
         "movable": 0,
@@ -134,7 +134,7 @@
       "title": "Scam Dodger",
       "description": "Run through the bureaucracy maze without getting caught!",
       "thumbnailUrl": "https://images.unsplash.com/photo-1633419461186-7d7507690054?auto=format&fit=crop&q=80&w=400",
-      "plays": 8900,
+      "plays": 8901,
       "rating": 4.5,
       "playUrl": "/games/play/g2"
     },
@@ -143,10 +143,26 @@
       "title": "Debate Master",
       "description": "Shout louder than your opponent to win the argument!",
       "thumbnailUrl": "https://images.unsplash.com/photo-1544531586-fde5298cdd40?auto=format&fit=crop&q=80&w=400",
-      "plays": 5600,
+      "plays": 5601,
       "rating": 4.2,
       "playUrl": "/games/play/g3"
     }
   ],
-  "claims": []
+  "claims": [],
+  "auditLogs": [
+    {
+      "id": "log_1771620318697",
+      "userId": "superadmin",
+      "userName": "superadmin",
+      "action": "LOGIN",
+      "resource": "auth",
+      "resourceId": null,
+      "details": {
+        "method": "demo"
+      },
+      "ipAddress": "127.0.0.1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Trae/1.107.1 Chrome/142.0.7444.235 Electron/39.2.7 Safari/537.36",
+      "createdAt": "2026-02-20T20:45:18.697Z"
+    }
+  ]
 }

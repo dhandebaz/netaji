@@ -46,9 +46,9 @@ const Footer: React.FC = () => {
             <h4 className="text-white font-bold mb-6 text-sm uppercase tracking-wider">Platform</h4>
             <ul className="space-y-4 text-sm font-medium">
               <li><FooterLink to="/">Home</FooterLink></li>
-              <li><FooterLink to="/election-analytics">Live Elections</FooterLink></li>
+              <li><FooterLink to="/maps">Constituency Intel</FooterLink></li>
               <li><FooterLink to="/rankings">Leaderboard</FooterLink></li>
-              <li><FooterLink to="/maps">Constituency Maps</FooterLink></li>
+              <li><FooterLink to="/complaints">Complaints</FooterLink></li>
             </ul>
           </div>
 

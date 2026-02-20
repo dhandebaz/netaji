@@ -1,22 +1,38 @@
 
 import React, { useState, useEffect } from 'react';
 import { Inbox, Check, Send, User, MessageSquare, Clock, Search } from 'lucide-react';
-import { getGrievances, resolveGrievance } from '../../services/adminService';
 import { Grievance } from '../../types';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
+import { getSupportTickets, resolveSupportTicket } from '../../services/apiService';
 
 const AdminGrievances: React.FC = () => {
+    const { token } = useAuth();
     const [grievances, setGrievances] = useState<Grievance[]>([]);
     const [replyText, setReplyText] = useState<Record<string, string>>({});
     const [filter, setFilter] = useState<'all' | 'open' | 'resolved'>('all');
 
     useEffect(() => {
-        setGrievances(getGrievances());
-    }, []);
+        const load = async () => {
+            if (!token) return;
+            try {
+                const res = await getSupportTickets(token);
+                const items = (res as any).data || res;
+                setGrievances(items as Grievance[]);
+            } catch {
+                setGrievances([]);
+            }
+        };
+        load();
+    }, [token]);
 
-    const handleResolve = (id: string) => {
-        const updated = resolveGrievance(id);
-        setGrievances(updated);
+    const handleResolve = async (id: string) => {
+        if (!token) return;
+        try {
+            await resolveSupportTicket(id, token);
+            setGrievances(prev => prev.map(g => g.id === id ? { ...g, status: 'resolved' } : g));
+        } catch {
+        }
     };
 
     const handleReplyChange = (id: string, text: string) => {

@@ -326,11 +326,3 @@ export interface VoteTransaction {
     type: 'upvote' | 'downvote';
     blockHeight: number;
 }
-
-export interface ElectionPrediction {
-    party: string;
-    winProbability: number; // 0-100
-    projectedSeats: number;
-    sentimentScore: number; // -100 to 100
-    color: string;
-}

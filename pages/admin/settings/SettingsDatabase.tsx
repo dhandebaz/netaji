@@ -67,6 +67,15 @@ const SettingsDatabase: React.FC<Props> = ({ settings, updateSettings }) => {
         }, 2000);
     };
 
+    const supabaseDb = settings.data.databases.find((db) => db.type === 'supabase');
+    const supabaseEnabled = !!supabaseDb?.enabled;
+    const supabaseStatus = supabaseDb?.status || 'disconnected';
+    const firebaseConfigured = Boolean(
+        import.meta.env.VITE_FIREBASE_API_KEY &&
+        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN &&
+        import.meta.env.VITE_FIREBASE_PROJECT_ID
+    );
+
     return (
         <div className="space-y-8 max-w-6xl pb-10">
             
@@ -168,6 +177,37 @@ const SettingsDatabase: React.FC<Props> = ({ settings, updateSettings }) => {
                             className="w-full accent-slate-900 cursor-pointer"
                         />
                         <p className="text-[10px] text-slate-400 mt-2 text-center">Logs older than {settings.data.retentionDays} days are purged.</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Auth Providers Overview */}
+            <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm">
+                <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <ShieldCheck size={18} className="text-emerald-500" /> Auth Providers
+                </h3>
+                <div className="space-y-4 text-sm">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="font-semibold text-slate-800">Firebase Phone OTP</p>
+                            <p className="text-xs text-slate-500">
+                                {firebaseConfigured
+                                    ? 'Client keys present (VITE_FIREBASE_*)'
+                                    : 'Missing VITE_FIREBASE_* env vars'}
+                            </p>
+                        </div>
+                        <StatusBadge status={firebaseConfigured ? 'connected' : 'disconnected'} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="font-semibold text-slate-800">Supabase Voter Login</p>
+                            <p className="text-xs text-slate-500">
+                                {supabaseEnabled
+                                    ? 'Primary App DB (Supabase) enabled in settings'
+                                    : 'Disabled in settings'}
+                            </p>
+                        </div>
+                        <StatusBadge status={supabaseEnabled && supabaseStatus !== 'error' ? 'connected' : supabaseStatus} />
                     </div>
                 </div>
             </div>

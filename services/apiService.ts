@@ -169,6 +169,10 @@ export const login = async (email: string, password: string, role?: string) => {
   return apiCall('POST', '/auth/login', { email, password, role });
 };
 
+export const firebaseLogin = async (idToken: string, role?: string) => {
+  return apiCall('POST', '/auth/firebase-login', { idToken, role });
+};
+
 export const verifyToken = async (token: string) => {
   return apiCall('POST', '/auth/verify', {}, token);
 };
@@ -199,5 +203,14 @@ export const aiAnalyze = (analysisType: string, token: string) =>
   apiCall('POST', '/ai/analyze', { analysisType }, token);
 
 export const healthCheck = () => apiCall('GET', '/health');
+
+export const submitSupportTicket = (data: { name: string; email: string; subject: string; message: string }) =>
+  apiCall('POST', '/grievances', data);
+
+export const getSupportTickets = (token: string) =>
+  apiCall<{ data: any[] }>('GET', '/grievances', undefined, token);
+
+export const resolveSupportTicket = (id: string, token: string) =>
+  apiCall('POST', `/grievances/${id}/resolve`, {}, token);
 
 export { safeApiCall, ApiError };

@@ -12,12 +12,14 @@ interface Props {
 const RoleSelection: React.FC<Props> = ({ onSelect, pricing }) => {
     return (
         <div className="space-y-10">
-            <div className="text-center">
-                <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-4">Choose your Identity</h1>
-                <p className="text-xl text-slate-500 max-w-2xl mx-auto">Join Neta to participate in democracy, volunteer for transparency, or build on our data.</p>
+            <div className="text-center px-2">
+                <h1 className="text-3xl md:text-5xl font-black text-slate-900 mb-4 leading-tight">Choose your Identity</h1>
+                <p className="text-base md:text-xl text-slate-500 max-w-2xl mx-auto">
+                    Join Neta to participate in democracy, volunteer for transparency, or build on our data.
+                </p>
             </div>
 
-            <div className="grid md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <RoleCard 
                     title="Citizen Voter" 
                     icon={<User size={32}/>}

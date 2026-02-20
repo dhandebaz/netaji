@@ -72,8 +72,7 @@ const Navbar: React.FC = () => {
         {/* Navigation Pills */}
         <div className="flex items-center px-1 shrink-0 h-full gap-1">
           <DesktopLink to="/" label="Home" active={isActive('/') && location.pathname === '/'} />
-          <DesktopLink to="/complaints" label="Complaints" active={isActive('/complaints')} />
-          <DesktopLink to="/election-analytics" label="Exit Polls" active={isActive('/election-analytics')} isLive />
+          <DesktopLink to="/maps" label="Constituency Intel" active={isActive('/maps')} />
           <DesktopLink to="/games" label="Games" active={isActive('/games')} />
           
           {user && (user.role === 'volunteer' || user.role === 'superadmin') && (
@@ -148,7 +147,7 @@ const Navbar: React.FC = () => {
           {/* Bottom Bar */}
           <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 py-3 pb-safe z-[60] flex justify-between items-center shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
               <MobileNavItem to="/" icon={<HomeIcon size={22}/>} label="Home" active={isActive('/') && location.pathname === '/'} />
-              <MobileNavItem to="/complaints" icon={<AlertCircle size={22}/>} label="Complaints" active={isActive('/complaints')} />
+              <MobileNavItem to="/maps" icon={<MapIcon size={22}/>} label="Intel" active={isActive('/maps')} />
               
               {/* Center Floating Action Button (Menu Trigger) */}
               <div className="relative -top-6">
@@ -160,7 +159,6 @@ const Navbar: React.FC = () => {
                   </button>
               </div>
 
-              <MobileNavItem to="/election-analytics" icon={<TrendingUp size={22}/>} label="Polls" active={isActive('/election-analytics')} isLive />
               <MobileNavItem to="/games" icon={<Gamepad2 size={22}/>} label="Games" active={isActive('/games')} />
           </div>
 

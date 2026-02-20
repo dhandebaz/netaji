@@ -11,7 +11,10 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, desc, sql, and, or, like } from 'drizzle-orm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import admin from 'firebase-admin';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { fetchMultipleRealPoliticians, getFallbackPoliticians, fetchOneRealPolitician } from './services/realDataLoader.mjs';
+import { fetchRealPoliticiansFromMyNeta as fetchStatePoliticiansFromMyNeta } from './services/realMynetaScraper.mjs';
 
 const app = express();
 
@@ -190,6 +193,119 @@ async function ensurePoliticiansTable() {
   }
 }
 
+async function upsertRealPoliticiansToDb(realPoliticians, tenantId = 'default') {
+  if (!pool) return;
+  await ensurePoliticiansTable();
+  for (const p of realPoliticians) {
+    try {
+      const name = p.name || 'Unknown';
+      const slug = p.slug || generateSlug(name);
+      const mynetaId = p.mynetaId || String(p.id || '');
+      const electionSlug = p.electionSlug || 'LokSabha2024';
+      const existing = await pool.query(
+        `SELECT id FROM politicians WHERE myneta_id = $1 AND election_slug = $2 LIMIT 1`,
+        [mynetaId, electionSlug]
+      );
+      if (existing.rows.length) {
+        const id = existing.rows[0].id;
+        await pool.query(
+          `UPDATE politicians
+           SET name = $1,
+               slug = $2,
+               party = $3,
+               party_logo = $4,
+               state = $5,
+               constituency = $6,
+               photo_url = $7,
+               age = $8,
+               approval_rating = $9,
+               total_assets = $10,
+               criminal_cases = $11,
+               education = $12,
+               verified = $13,
+               status = $14,
+               source = $15,
+               updated_at = NOW()
+           WHERE id = $16`,
+          [
+            name,
+            slug,
+            p.party || null,
+            p.partyLogo || null,
+            p.state || null,
+            p.constituency || null,
+            p.photoUrl || null,
+            p.age || null,
+            p.approvalRating ?? 50,
+            p.totalAssets ?? 0,
+            p.criminalCases ?? 0,
+            p.education || null,
+            p.verified ?? true,
+            p.status || 'active',
+            p.source || 'MyNeta.info',
+            id,
+          ]
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO politicians
+             (tenant_id,name,slug,party,party_logo,state,constituency,photo_url,myneta_id,election_slug,age,approval_rating,total_assets,criminal_cases,education,attendance,verified,status,role,votes_up,votes_down,source,created_at,updated_at)
+           VALUES
+             ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+          [
+            tenantId,
+            name,
+            slug,
+            p.party || null,
+            p.partyLogo || null,
+            p.state || null,
+            p.constituency || null,
+            p.photoUrl || null,
+            mynetaId,
+            electionSlug,
+            p.age || null,
+            p.approvalRating ?? 50,
+            p.totalAssets ?? 0,
+            p.criminalCases ?? 0,
+            p.education || null,
+            p.attendance ?? 0,
+            p.verified ?? true,
+            p.status || 'active',
+            p.role || 'elected',
+            p.votes?.up || p.votesUp || 0,
+            p.votes?.down || p.votesDown || 0,
+            p.source || 'MyNeta.info',
+            new Date(),
+            new Date(),
+          ]
+        );
+      }
+    } catch (e) {}
+  }
+}
+
+async function saveScraperMeta(tenantId, meta) {
+  if (!pool) return;
+  await ensureSettingsTable();
+  const key = 'politician_scraper_status';
+  let current = { tenants: {} };
+  try {
+    const existing = await pool.query('SELECT value FROM settings WHERE key = $1 LIMIT 1', [key]);
+    if (existing.rows[0]?.value) {
+      current = existing.rows[0].value;
+    }
+  } catch (e) {}
+  const tenants = current.tenants || {};
+  const tId = tenantId || 'default';
+  tenants[tId] = { ...(tenants[tId] || {}), ...meta };
+  const value = { tenants };
+  await pool.query(
+    `INSERT INTO settings (key, value) VALUES ($1,$2)
+     ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+    [key, value]
+  );
+}
+
 let ensuredVotes = false;
 async function ensureVotesTable() {
   if (!pool || ensuredVotes) return;
@@ -274,6 +390,26 @@ async function ensureSettingsTable() {
     ensuredSettings = true;
   } catch (e) {
     ensuredSettings = false;
+  }
+}
+
+let ensuredGrievances = false;
+async function ensureGrievancesTable() {
+  if (!pool || ensuredGrievances) return;
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS grievances (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      message TEXT NOT NULL,
+      status TEXT DEFAULT 'open',
+      created_at TIMESTAMP DEFAULT NOW()
+    )`);
+    ensuredGrievances = true;
+  } catch (e) {
+    ensuredGrievances = false;
   }
 }
 
@@ -1256,27 +1392,62 @@ app.delete('/api/games/:id', (req, res) => {
   } else res.status(404).json({ error: 'Not found' });
 });
 
-app.get('/api/scraper/fetch-politicians', async (req, res) => {
+async function runRealPoliticianRefresh(req, res) {
   try {
     console.info('[API] Scraper triggered - Fetching real politician data...');
     const data = getData();
-    
-    let realPoliticians = await fetchMultipleRealPoliticians();
+    const tenantId = req.tenant || 'default';
+    const rawState = req.query?.state || null;
+    const stateFilter = typeof rawState === 'string' ? rawState : null;
+    const rawStrict = req.query?.strict;
+    const isStrict = typeof rawStrict === 'string' && ['1', 'true', 'yes'].includes(rawStrict.toLowerCase());
+    let realPoliticians = [];
+    if (stateFilter && stateFilter.toLowerCase() === 'delhi') {
+      realPoliticians = await fetchStatePoliticiansFromMyNeta('Delhi2025', 200, { strict: isStrict });
+    } else {
+      realPoliticians = await fetchMultipleRealPoliticians(6, stateFilter || null);
+    }
+    let usedFallback = false;
     if (!realPoliticians || realPoliticians.length === 0) {
+      if (isStrict) {
+        console.warn('[API] No real data fetched in strict mode, leaving existing data unchanged');
+        return res.status(503).json({ success: false, error: 'no_live_data', count: 0, strict: true });
+      }
       console.warn('[API] No real data fetched, using fallback politicians');
       realPoliticians = getFallbackPoliticians(6);
+      usedFallback = true;
     }
-    
+    if (pool) {
+      await upsertRealPoliticiansToDb(realPoliticians, tenantId);
+    }
     data.politicians = realPoliticians;
     saveData(data);
     broadcastUpdate('politicians:refreshed', { count: realPoliticians.length });
+    const actorEmail = req.user?.email || 'system';
+    const actorName = req.user?.name || 'system';
+    logAudit(actorEmail, actorName, 'REFRESH_POLITICIANS', 'politician', null, { count: realPoliticians.length }, req);
+    await saveScraperMeta(tenantId, {
+      lastRunAt: new Date().toISOString(),
+      lastSource: usedFallback ? 'fallback' : 'live',
+      lastState: stateFilter || 'all',
+      lastCount: realPoliticians.length,
+    });
     console.info(`[API] ✓ Scraper complete: Updated ${realPoliticians.length} politicians`);
     res.json({ success: true, count: realPoliticians.length, politicians: realPoliticians });
   } catch (error) {
     console.error('[API] Scraper error:', error.message);
+    const rawStrict = req.query?.strict;
+    const isStrict = typeof rawStrict === 'string' && ['1', 'true', 'yes'].includes(rawStrict.toLowerCase());
+    if (isStrict) {
+      return res.status(500).json({ success: false, error: 'scraper_failed', strict: true });
+    }
     const fallbackData = getFallbackPoliticians(6);
     res.json({ success: true, count: fallbackData.length, politicians: fallbackData, fallback: true });
   }
+}
+
+app.get('/api/scraper/fetch-politicians', async (req, res) => {
+  await runRealPoliticianRefresh(req, res);
 });
 
 app.get('/api/fetch-real-data', async (req, res) => {
@@ -1285,13 +1456,7 @@ app.get('/api/fetch-real-data', async (req, res) => {
     if (data.politicians && data.politicians.length > 0) {
       res.json({ success: true, politicians: data.politicians, count: data.politicians.length });
     } else {
-      let realPoliticians = await fetchMultipleRealPoliticians();
-      if (!realPoliticians || realPoliticians.length === 0) {
-        realPoliticians = getFallbackPoliticians(6);
-      }
-      data.politicians = realPoliticians;
-      saveData(data);
-      res.json({ success: true, politicians: realPoliticians, count: realPoliticians.length });
+      await runRealPoliticianRefresh(req, res);
     }
   } catch (error) {
     console.error('[API] Fetch real data error:', error.message);
@@ -1300,11 +1465,11 @@ app.get('/api/fetch-real-data', async (req, res) => {
   }
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || (() => {
-  const secret = crypto.randomBytes(32).toString('hex');
-  console.warn('[Auth] WARNING: JWT_SECRET not set. Using random secret for this session.');
-  return secret;
-})();
+if (!process.env.JWT_SECRET) {
+  console.error('[Auth] ERROR: JWT_SECRET must be set in environment. Refusing to start.');
+  process.exit(1);
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRY = '24h';
 
 const ADMIN_USERS = {
@@ -1318,6 +1483,53 @@ const DEMO_PASSWORDS = {
   developer: 'dev123',
   volunteer: 'vol123',
   voter: 'citizen123'
+};
+
+let firebaseAdminApp = null;
+if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+  try {
+    firebaseAdminApp = admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      }),
+    });
+    console.log('[Auth] Firebase Admin initialized');
+  } catch (err) {
+    console.error('[Auth] Failed to initialize Firebase Admin', err);
+  }
+} else {
+  console.warn('[Auth] Firebase Admin credentials not fully set. OTP login disabled.');
+}
+
+let supabase = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  try {
+    supabase = createSupabaseClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        persistSession: false
+      }
+    });
+    console.log('[DB] Supabase client initialized');
+  } catch (e) {
+    console.error('[DB] Failed to initialize Supabase client', e);
+  }
+} else {
+  console.warn('[DB] Supabase env vars not fully set. Voter auth will fall back to local.');
+}
+
+const isSupabaseAuthEnabled = () => {
+  try {
+    const data = getData();
+    const settings = data.settings || {};
+    const dbs = settings.data?.databases || [];
+    const supaDb = dbs.find((db) => db.type === 'supabase');
+    return !!(supaDb && supaDb.enabled);
+  } catch (e) {
+    console.warn('[Auth] Failed to read Supabase settings from data store', e);
+    return false;
+  }
 };
 
 const verifyToken = (req, res, next) => {
@@ -1343,57 +1555,117 @@ const requireRole = (...roles) => (req, res, next) => {
 
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, password, role } = req.body;
-  
-  if (role && password) {
-    const demoPassword = DEMO_PASSWORDS[role];
-    if (demoPassword && password === demoPassword) {
+  try {
+    if (role === 'voter') {
+      if (!isSupabaseAuthEnabled()) {
+        return res.status(503).json({ success: false, error: 'supabase_disabled' });
+      }
+      if (!supabase) {
+        return res.status(503).json({ success: false, error: 'supabase_unavailable' });
+      }
+      if (!email || !password) {
+        return res.status(400).json({ success: false, error: 'missing_credentials' });
+      }
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error || !data?.user) {
+        return res.status(401).json({ success: false, error: 'invalid_credentials' });
+      }
+      const supaUser = data.user;
       const token = jwt.sign(
-        { id: Date.now().toString(), role, email: `${role}@neta.app` },
+        { id: supaUser.id, role: 'voter', email: supaUser.email },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRY }
+      );
+      logAudit(
+        supaUser.email || supaUser.id,
+        supaUser.user_metadata?.full_name || 'Citizen Voter',
+        'LOGIN',
+        'auth',
+        null,
+        { method: 'supabase_password' },
+        req
+      );
+      return res.json({
+        success: true,
+        user: {
+          id: supaUser.id,
+          name: supaUser.user_metadata?.full_name || 'Citizen Voter',
+          email: supaUser.email || email,
+          role: 'voter',
+          token
+        }
+      });
+    }
+
+    const user = ADMIN_USERS[email];
+    if (user && password && bcrypt.compareSync(password, user.passwordHash)) {
+      const token = jwt.sign(
+        { id: Date.now().toString(), role: user.role, email },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRY }
       );
       
-      logAudit(role, role, 'LOGIN', 'auth', null, { method: 'demo' }, req);
+      logAudit(email, user.name, 'LOGIN', 'auth', null, { method: 'password' }, req);
       
       return res.json({
         success: true,
         user: {
           id: Date.now().toString(),
-          name: role === 'superadmin' ? 'Super Admin' :
-                role === 'developer' ? 'Dev Corp Ltd.' :
-                role === 'volunteer' ? 'Volunteer User' : 'Citizen',
-          email: `${role}@neta.app`,
-          role: role,
+          name: user.name,
+          email: email,
+          role: user.role,
           token
         }
       });
     }
-    return res.status(401).json({ success: false, error: 'Invalid demo credentials' });
+    return res.status(401).json({ success: false, error: 'Invalid credentials' });
+  } catch (e) {
+    console.error('[Auth] Login failed', e);
+    return res.status(500).json({ success: false, error: 'auth_internal_error' });
   }
-  
-  const user = ADMIN_USERS[email];
-  if (user && password && bcrypt.compareSync(password, user.passwordHash)) {
+});
+
+app.post('/api/auth/firebase-login', authLimiter, async (req, res) => {
+  if (!firebaseAdminApp) {
+    return res.status(503).json({ success: false, error: 'otp_unavailable' });
+  }
+  const { idToken, role } = req.body;
+  if (!idToken) {
+    return res.status(400).json({ success: false, error: 'missing_token' });
+  }
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    const userPhone = decoded.phone_number || null;
+    const uid = decoded.uid;
+    const assignedRole = role && DEMO_PASSWORDS[role] ? role : 'voter';
     const token = jwt.sign(
-      { id: Date.now().toString(), role: user.role, email },
+      { id: uid, role: assignedRole, phone: userPhone },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRY }
     );
-    
-    logAudit(email, user.name, 'LOGIN', 'auth', null, { method: 'password' }, req);
-    
+    logAudit(
+      userPhone || uid,
+      'OTP User',
+      'LOGIN',
+      'auth',
+      null,
+      { method: 'firebase_phone', role: assignedRole },
+      req
+    );
     return res.json({
       success: true,
       user: {
-        id: Date.now().toString(),
-        name: user.name,
-        email: email,
-        role: user.role,
-        token
-      }
+        id: uid,
+        name: 'Citizen Voter',
+        email: userPhone || 'phone-user@neta.app',
+        role: assignedRole,
+        token,
+      },
     });
+  } catch (err) {
+    console.error('[Auth] Firebase token verification failed', err);
+    return res.status(401).json({ success: false, error: 'invalid_token' });
   }
-  
-  res.status(401).json({ success: false, error: 'Invalid credentials' });
 });
 
 app.post('/api/auth/verify', (req, res) => {
@@ -1477,15 +1749,18 @@ app.get('/api/admin/stats', verifyToken, requireRole('superadmin', 'developer'),
   });
 
   let dbStats = null;
+  let scraperMeta = null;
 
   if (pool) {
     try {
-      const politiciansRes = await pool.query('SELECT COUNT(*)::int AS c FROM politicians');
-      const complaintsRes = await pool.query('SELECT COUNT(*)::int AS c FROM complaints');
-      const pendingComplaintsRes = await pool.query("SELECT COUNT(*)::int AS c FROM complaints WHERE status = 'pending'");
-      const volunteersRes = await pool.query('SELECT COUNT(*)::int AS c FROM volunteers');
-      const rtiTasksRes = await pool.query('SELECT COUNT(*)::int AS c FROM rti_tasks');
-      const votesRes = await pool.query('SELECT COUNT(*)::int AS c FROM votes');
+      const tenantId = req.tenant || 'default';
+      const tenantParam = [tenantId];
+      const politiciansRes = await pool.query('SELECT COUNT(*)::int AS c FROM politicians WHERE tenant_id = $1 OR tenant_id IS NULL', tenantParam);
+      const complaintsRes = await pool.query('SELECT COUNT(*)::int AS c FROM complaints WHERE tenant_id = $1 OR tenant_id IS NULL', tenantParam);
+      const pendingComplaintsRes = await pool.query("SELECT COUNT(*)::int AS c FROM complaints WHERE tenant_id = $1 AND status = 'pending'", tenantParam);
+      const volunteersRes = await pool.query('SELECT COUNT(*)::int AS c FROM volunteers WHERE tenant_id = $1 OR tenant_id IS NULL', tenantParam);
+      const rtiTasksRes = await pool.query('SELECT COUNT(*)::int AS c FROM rti_tasks WHERE tenant_id = $1 OR tenant_id IS NULL', tenantParam);
+      const votesRes = await pool.query('SELECT COUNT(*)::int AS c FROM votes WHERE tenant_id = $1 OR tenant_id IS NULL', tenantParam);
 
       let gamesCount = null;
       try {
@@ -1504,6 +1779,13 @@ app.get('/api/admin/stats', verifyToken, requireRole('superadmin', 'developer'),
         votes: votesRes.rows[0]?.c ?? 0,
         games: gamesCount,
       };
+      try {
+        const metaRes = await pool.query("SELECT value FROM settings WHERE key = 'politician_scraper_status' LIMIT 1");
+        const tenants = metaRes.rows[0]?.value?.tenants || {};
+        scraperMeta = tenants[tenantId] || null;
+      } catch (e) {
+        scraperMeta = null;
+      }
     } catch (e) {
       dbStats = null;
     }
@@ -1522,6 +1804,11 @@ app.get('/api/admin/stats', verifyToken, requireRole('superadmin', 'developer'),
     games: dbStats?.games ?? (data.games?.length || 0),
     sseClients: clients.size,
     trafficData,
+    build: {
+      chunkSizeWarningLimit: 2500,
+      manualChunks: ['vendor', 'charts', 'motion'],
+      codeSplit: true,
+    },
     db: {
       connected: !!dbStats,
       provider: process.env.DATABASE_URL ? 'supabase_postgres' : 'file',
@@ -1532,6 +1819,7 @@ app.get('/api/admin/stats', verifyToken, requireRole('superadmin', 'developer'),
       rtiTasks: dbStats?.rtiTasks ?? null,
       votes: dbStats?.votes ?? null,
       games: dbStats?.games ?? null,
+      scraper: scraperMeta,
     },
   };
 
@@ -1602,6 +1890,110 @@ app.post('/api/ai/analyze', verifyToken, requireRole('superadmin', 'developer'),
   }
 });
 
+app.post('/api/admin/run-scraper', verifyToken, requireRole('superadmin'), async (req, res) => {
+  await runRealPoliticianRefresh(req, res);
+});
+
+app.post('/api/grievances', async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ success: false, error: 'support_channel_unavailable' });
+  }
+  try {
+    const { name, email, subject, message } = req.body || {};
+    if (!name || !email || !subject || !message) {
+      return res.status(400).json({ success: false, error: 'invalid_payload' });
+    }
+    await ensureGrievancesTable();
+    const id = Date.now().toString();
+    const tenantId = req.tenant || 'default';
+    await pool.query(
+      `INSERT INTO grievances (id, tenant_id, name, email, subject, message, status, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'open',NOW())`,
+      [id, tenantId, name, email, subject, message]
+    );
+    logAudit(email, name, 'CREATE_GRIEVANCE', 'grievance', id, { tenantId, subject }, req);
+    res.json({
+      success: true,
+      data: {
+        id,
+        name,
+        email,
+        subject,
+        message,
+        status: 'open',
+        date: new Date().toISOString(),
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'failed_to_create_grievance' });
+  }
+});
+
+app.get('/api/grievances', verifyToken, requireRole('superadmin'), async (req, res) => {
+  if (!pool) {
+    return res.json({ data: [], total: 0 });
+  }
+  try {
+    await ensureGrievancesTable();
+    const tenantId = req.tenant || 'default';
+    const result = await pool.query(
+      `SELECT id, tenant_id, name, email, subject, message, status, created_at
+       FROM grievances
+       WHERE tenant_id = $1 OR tenant_id IS NULL
+       ORDER BY created_at DESC`,
+      [tenantId]
+    );
+    const items = result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      subject: row.subject,
+      message: row.message,
+      status: row.status || 'open',
+      date: row.created_at ? row.created_at.toISOString() : new Date().toISOString(),
+    }));
+    res.json({ data: items, total: items.length });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'failed_to_fetch_grievances' });
+  }
+});
+
+app.post('/api/grievances/:id/resolve', verifyToken, requireRole('superadmin'), async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ success: false, error: 'support_channel_unavailable' });
+  }
+  try {
+    await ensureGrievancesTable();
+    const { id } = req.params;
+    const result = await pool.query(
+      `UPDATE grievances
+       SET status = 'resolved'
+       WHERE id = $1
+       RETURNING id, name, email, subject, message, status, created_at`,
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'not_found' });
+    }
+    const row = result.rows[0];
+    logAudit(req.user.email, req.user.email, 'RESOLVE_GRIEVANCE', 'grievance', id, null, req);
+    res.json({
+      success: true,
+      data: {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        subject: row.subject,
+        message: row.message,
+        status: row.status || 'resolved',
+        date: row.created_at ? row.created_at.toISOString() : new Date().toISOString(),
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'failed_to_resolve_grievance' });
+  }
+});
+
 app.get('/api/db/status', verifyToken, requireRole('superadmin'), (req, res) => {
   res.json({
     primary: { 
@@ -1650,9 +2042,16 @@ initData();
     console.log('[Server] ✓ Rate limiting active');
     console.log('[Server] ✓ Security headers enabled (Helmet)');
     
-    const realPoliticians = await fetchMultipleRealPoliticians();
-    if (realPoliticians && realPoliticians.length > 0) {
-      const data = getData();
+    const data = getData();
+    if (!data.politicians || data.politicians.length === 0) {
+      const tenantId = null;
+      let realPoliticians = await fetchMultipleRealPoliticians();
+      if (!realPoliticians || realPoliticians.length === 0) {
+        realPoliticians = getFallbackPoliticians(6);
+      }
+      if (pool) {
+        await upsertRealPoliticiansToDb(realPoliticians, tenantId || 'default');
+      }
       data.politicians = realPoliticians;
       saveData(data);
       console.log(`[PoliticianFetcher] ✓ Loaded ${realPoliticians.length} politicians with real photos`);
