@@ -109,9 +109,17 @@ function mapRowToPublic(r: PoliticianRow) {
 }
 
 export async function getPoliticiansHandler(params: GetPoliticiansParams) {
+  const limit = typeof params.limit === 'number' && !isNaN(params.limit) ? params.limit : 100;
+  const offset = typeof params.offset === 'number' && !isNaN(params.offset) ? params.offset : 0;
+
   const pool = getPool();
   if (!pool) {
-    throw new Error('database_unavailable');
+    return {
+      data: [],
+      total: 0,
+      limit: Number(limit),
+      offset: Number(offset),
+    };
   }
 
   await ensurePoliticiansTable();
@@ -122,9 +130,6 @@ export async function getPoliticiansHandler(params: GetPoliticiansParams) {
   const sort = params.sort || undefined;
   const role = params.role || undefined;
   const ids = params.ids || undefined;
-
-  const limit = typeof params.limit === 'number' && !isNaN(params.limit) ? params.limit : 100;
-  const offset = typeof params.offset === 'number' && !isNaN(params.offset) ? params.offset : 0;
 
   const values: (string | number)[] = [];
   const where: string[] = [];
@@ -213,7 +218,7 @@ export async function getPoliticiansHandler(params: GetPoliticiansParams) {
 export async function getPoliticianBySlugHandler(params: { tenant: string | null; slug: string }) {
   const pool = getPool();
   if (!pool) {
-    throw new Error('database_unavailable');
+    return null;
   }
   await ensurePoliticiansTable();
   const values: (string | number)[] = [];
