@@ -14,8 +14,7 @@ export const AdminDataFetcher: React.FC = () => {
   const handleFetchRealData = async () => {
     setFetchStatus({ status: 'loading', message: 'Fetching real politician data...' });
     try {
-      const apiUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : `${window.location.protocol}//${window.location.hostname}:3001`;
-      const response = await fetch(`${apiUrl}/api/fetch-real-data`);
+      const response = await fetch('/api/fetch-real-data');
       const data = await response.json();
 
       if (data.success) {

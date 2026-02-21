@@ -151,6 +151,20 @@
   "claims": [],
   "auditLogs": [
     {
+      "id": "log_1771629686176",
+      "userId": "superadmin",
+      "userName": "superadmin",
+      "action": "LOGIN",
+      "resource": "auth",
+      "resourceId": null,
+      "details": {
+        "method": "demo"
+      },
+      "ipAddress": "127.0.0.1",
+      "userAgent": "node",
+      "createdAt": "2026-02-20T23:21:26.176Z"
+    },
+    {
       "id": "log_1771620318697",
       "userId": "superadmin",
       "userName": "superadmin",

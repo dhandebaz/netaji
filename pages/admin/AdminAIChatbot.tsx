@@ -10,20 +10,6 @@ interface Message {
   suggestions?: string[];
 }
 
-const getAPIBaseUrl = () => {
-  if (typeof window !== 'undefined' && window.location) {
-    const hostname = window.location.hostname;
-    if (hostname.includes('replit') || hostname.includes('.dev')) {
-      return window.location.origin.replace(':5000', ':3001').replace(/:\d+$/, '') + ':3001';
-    }
-    if (hostname.includes('localhost') || hostname === '127.0.0.1') {
-      return 'http://localhost:3001';
-    }
-    return `${window.location.protocol}//${hostname}:3001`;
-  }
-  return 'http://localhost:3001';
-};
-
 const AdminAIChatbot: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -66,8 +52,7 @@ const AdminAIChatbot: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const API_URL = getAPIBaseUrl();
-      const response = await fetch(`${API_URL}/api/ai/chat`, {
+      const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -109,8 +94,7 @@ const AdminAIChatbot: React.FC = () => {
   const runAnalysis = async (type: string) => {
     setIsLoading(true);
     try {
-      const API_URL = getAPIBaseUrl();
-      const response = await fetch(`${API_URL}/api/ai/analyze`, {
+      const response = await fetch('/api/ai/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ analysisType: type })

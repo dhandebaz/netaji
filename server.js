@@ -76,6 +76,16 @@ const getBaseUrl = () => {
   return 'https://neta.ink';
 };
 
+const getAIClient = () => {
+  const key = process.env.GOOGLE_API_KEY || process.env.VITE_GOOGLE_API_KEY || '';
+  if (!key) return null;
+  try {
+    return new GoogleGenerativeAI(key);
+  } catch (e) {
+    return null;
+  }
+};
+
 const escapeXml = (value) => {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -585,7 +595,7 @@ app.get('/api/sse', (req, res) => {
 
 const generateSlug = (name) => name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
 
-app.get('/api/sitemap.xml', async (req, res) => {
+const handleSitemapXml = async (req, res) => {
   const baseUrl = getBaseUrl();
   let politicianSlugs = [];
   if (pool) {
@@ -652,9 +662,9 @@ app.get('/api/sitemap.xml', async (req, res) => {
   ].join('');
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
   res.send(xml);
-});
+};
 
-app.get('/api/robots.txt', async (req, res) => {
+const handleRobotsTxt = async (req, res) => {
   const baseUrl = getBaseUrl();
   const settings = await loadSystemSettings();
   const allowIndexing = settings.seo && settings.seo.allowIndexing === false ? false : true;
@@ -668,7 +678,13 @@ app.get('/api/robots.txt', async (req, res) => {
   }
   lines.push(`Sitemap: ${baseUrl}/sitemap.xml`);
   res.type('text/plain; charset=utf-8').send(lines.join('\n'));
-});
+};
+
+app.get('/api/sitemap.xml', handleSitemapXml);
+app.get('/sitemap.xml', handleSitemapXml);
+
+app.get('/api/robots.txt', handleRobotsTxt);
+app.get('/robots.txt', handleRobotsTxt);
 
 /**
  * Image Proxy to bypass CORS/ORB
@@ -1684,6 +1700,151 @@ app.get('/api/llm/politician/:slug', async (req, res) => {
   res.json(payload);
 });
 
+app.get('/api/llm/politician/:slug/summary', aiLimiter, async (req, res) => {
+  const slug = req.params.slug;
+  if (!slug) {
+    res.status(400).json({ error: 'Slug is required' });
+    return;
+  }
+  let record = null;
+  if (pool) {
+    try {
+      await ensurePoliticiansTable();
+      const params = [slug];
+      let where = 'slug = $1';
+      if (req.tenant) {
+        params.push(req.tenant);
+        where += ' AND (tenant_id = $2 OR tenant_id IS NULL)';
+      }
+      const rows = await pool.query(`SELECT * FROM politicians WHERE ${where} LIMIT 1`, params);
+      if (rows.rows[0]) {
+        record = rows.rows[0];
+      }
+    } catch (e) {}
+  }
+  if (!record) {
+    const data = getData();
+    const list = data.politicians || [];
+    const found = list.find(p => {
+      const slugValue = p.slug || generateSlug(p.name);
+      if (slugValue !== slug) return false;
+      if (req.tenant && p.tenantId && p.tenantId !== req.tenant) return false;
+      return true;
+    });
+    if (found) {
+      record = {
+        id: found.id,
+        name: found.name,
+        party: found.party,
+        state: found.state,
+        constituency: found.constituency,
+        approval_rating: found.approvalRating,
+        total_assets: found.totalAssets,
+        criminal_cases: found.criminalCases,
+        attendance: found.attendance,
+        history: found.history || [],
+      };
+    }
+  }
+  if (!record) {
+    res.status(404).json({ error: 'Politician not found' });
+    return;
+  }
+  const ai = getAIClient();
+  if (!ai || typeof fetch === 'undefined') {
+    res.json({
+      structured: {
+        id: record.id,
+        name: record.name,
+        party: record.party,
+        state: record.state,
+        constituency: record.constituency,
+        approval_rating: typeof record.approval_rating === 'number' ? record.approval_rating : null,
+        total_assets: typeof record.total_assets === 'number' ? record.total_assets : null,
+        criminal_cases: typeof record.criminal_cases === 'number' ? record.criminal_cases : null,
+        attendance: typeof record.attendance === 'number' ? record.attendance : null,
+      },
+      narrative: null,
+      swot: null,
+      provider: 'offline',
+    });
+    return;
+  }
+  try {
+    const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const history = Array.isArray(record.history) ? record.history : [];
+    const recentRole = history[0]?.position || 'Politician';
+    const prompt = [
+      'You are NetaAI, a neutral political analyst for India.',
+      'Generate a short narrative summary and SWOT analysis for this politician.',
+      'Keep tone factual and non-partisan.',
+      `Name: ${record.name}`,
+      `Party: ${record.party || 'Unknown'}`,
+      `State: ${record.state || 'Unknown'}`,
+      `Constituency: ${record.constituency || 'Unknown'}`,
+      `Approval Rating: ${typeof record.approval_rating === 'number' ? record.approval_rating : 'Unknown'}`,
+      `Total Assets (Cr): ${typeof record.total_assets === 'number' ? record.total_assets : 'Unknown'}`,
+      `Criminal Cases: ${typeof record.criminal_cases === 'number' ? record.criminal_cases : 'Unknown'}`,
+      `Attendance: ${typeof record.attendance === 'number' ? record.attendance : 'Unknown'}%`,
+      `Recent Role: ${recentRole}`,
+      '',
+      'Respond as strict JSON with this exact shape:',
+      '{',
+      '  "narrative": "2 paragraphs of analysis.",',
+      '  "swot": {',
+      '    "strengths": ["..."],',
+      '    "weaknesses": ["..."],',
+      '    "opportunities": ["..."],',
+      '    "threats": ["..."]',
+      '  }',
+      '}',
+    ].join('\n');
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    });
+    const text = result.response.text();
+    let parsed = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      parsed = null;
+    }
+    res.json({
+      structured: {
+        id: record.id,
+        name: record.name,
+        party: record.party,
+        state: record.state,
+        constituency: record.constituency,
+        approval_rating: typeof record.approval_rating === 'number' ? record.approval_rating : null,
+        total_assets: typeof record.total_assets === 'number' ? record.total_assets : null,
+        criminal_cases: typeof record.criminal_cases === 'number' ? record.criminal_cases : null,
+        attendance: typeof record.attendance === 'number' ? record.attendance : null,
+      },
+      narrative: parsed && typeof parsed.narrative === 'string' ? parsed.narrative : null,
+      swot: parsed && parsed.swot ? parsed.swot : null,
+      provider: 'google-gemini',
+    });
+  } catch (e) {
+    res.json({
+      structured: {
+        id: record.id,
+        name: record.name,
+        party: record.party,
+        state: record.state,
+        constituency: record.constituency,
+        approval_rating: typeof record.approval_rating === 'number' ? record.approval_rating : null,
+        total_assets: typeof record.total_assets === 'number' ? record.total_assets : null,
+        criminal_cases: typeof record.criminal_cases === 'number' ? record.criminal_cases : null,
+        attendance: typeof record.attendance === 'number' ? record.attendance : null,
+      },
+      narrative: null,
+      swot: null,
+      provider: 'error',
+    });
+  }
+});
+
 app.get('/api/og/politician/:slug', async (req, res) => {
   const slug = req.params.slug;
   if (!slug) {
@@ -2630,9 +2791,4 @@ initData();
   }
 })();
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚀 Backend API running on port ${PORT}`);
-  console.log(`   Health: http://localhost:${PORT}/api/health`);
-  console.log(`   SSE: http://localhost:${PORT}/api/sse\n`);
-});
+export default app;
