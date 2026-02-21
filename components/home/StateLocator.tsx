@@ -1,3 +1,4 @@
+'use client';
 
 import React, { useState } from 'react';
 import { MapPin, ChevronDown, Crosshair } from 'lucide-react';

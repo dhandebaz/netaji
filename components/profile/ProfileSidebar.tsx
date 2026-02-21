@@ -1,3 +1,4 @@
+'use client';
 
 import React from 'react';
 import { CheckCircle, Share2, ThumbsUp, ThumbsDown, ArrowLeft } from 'lucide-react';

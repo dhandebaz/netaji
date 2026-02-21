@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShieldCheck, LayoutDashboard, FileText, Users, Inbox, BrainCircuit, 
   Database, Settings, Menu, LogOut, Bell, Search, ChevronDown, ChevronRight,
-  Globe, Sliders, Shield, CreditCard, Network, CheckCircle, Info, AlertCircle, Mic2, Gamepad2, MessageSquare
+  Globe, Sliders, Shield, CreditCard, Network, CheckCircle, Info, AlertCircle, Mic2, Gamepad2, MessageSquare, Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -19,6 +19,8 @@ import AdminGrievances from './admin/AdminGrievances';
 import AdminComplaints from './admin/AdminComplaints';
 import AdminAICore from './admin/AdminAICore';
 import AdminDataPipeline from './admin/AdminDataPipeline';
+import SystemIntelligence from './admin/SystemIntelligence';
+import SystemSnapshots from './admin/SystemSnapshots';
 import AdminSettings from './admin/AdminSettings';
 import AdminGames from './admin/AdminGames';
 import AdminAIChatbot from './admin/AdminAIChatbot';
@@ -146,6 +148,8 @@ const SuperAdmin: React.FC = () => {
             <SidebarLink icon={<MessageSquare size={20} />} label="AI Assistant" active={activeTab === 'ai-chatbot'} onClick={() => handleTabChange('ai-chatbot')} />
             <SidebarLink icon={<BrainCircuit size={20} />} label="Neural Core" active={activeTab === 'ai-core'} onClick={() => handleTabChange('ai-core')} />
             <SidebarLink icon={<Database size={20} />} label="Data Pipeline" active={activeTab === 'pipeline'} onClick={() => handleTabChange('pipeline')} />
+            <SidebarLink icon={<Activity size={20} />} label="System Intelligence" active={activeTab === 'system-intelligence'} onClick={() => handleTabChange('system-intelligence')} />
+            <SidebarLink icon={<FileText size={20} />} label="System Snapshots" active={activeTab === 'system-snapshots'} onClick={() => handleTabChange('system-snapshots')} />
             
             {/* Settings Group */}
             <div className="relative">
@@ -290,6 +294,8 @@ const SuperAdmin: React.FC = () => {
                       {activeTab === 'ai-chatbot' && <AdminAIChatbot />}
                       {activeTab === 'ai-core' && <AdminAICore />}
                       {activeTab === 'pipeline' && <AdminDataPipeline />}
+                      {activeTab === 'system-intelligence' && <SystemIntelligence />}
+                      {activeTab === 'system-snapshots' && <SystemSnapshots />}
                       
                       {activeTab.startsWith('settings') && (
                           <AdminSettings activePage={activeTab.replace('settings-', '')} />

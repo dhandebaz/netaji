@@ -2,6 +2,7 @@ import { Politician, NewsItem, PublicComplaint, Volunteer, RTITask } from '../ty
 import { MOCK_POLITICIANS, STATES } from '../constants';
 import { fetchNewsForPolitician } from './rssService';
 import { fetchRealPoliticiansFromMyNeta } from './mynetaService';
+import { getPoliticians } from './apiService';
 
 // Generate slug from politician name
 const generateSlug = (name: string): string => {
@@ -297,9 +298,8 @@ export const fetchPoliticiansByIds = async (ids: number[]): Promise<Politician[]
 
   // Fetch missing ones in bulk from backend
   try {
-    const res = await getPoliticians({ ids: missingIds });
-    const fetched = Array.isArray(res) ? res : (res.data || []);
-    
+    const fetched = await getPoliticians({ ids: missingIds });
+
     fetched.forEach((p: Politician) => {
       // Update cache
       if (!politicianCache.find(cached => cached.id === p.id)) {
@@ -872,4 +872,6 @@ export const syncGamesWithBackend = async () => {
   return false;
 };
 
-initializeData();
+if (typeof window !== 'undefined') {
+  initializeData();
+}

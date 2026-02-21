@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Shield, ScanFace, CheckCircle, Smartphone, Upload, AlertCircle, Loader } from 'lucide-react';
@@ -83,9 +85,9 @@ const VoteModal: React.FC<Props> = ({ isOpen, onClose, politician, voteType }) =
       let verifier: RecaptchaVerifier;
       if (!(window as any).voteOtpRecaptchaVerifier) {
         verifier = new RecaptchaVerifier(
+          firebaseAuth,
           'vote-otp-recaptcha',
-          { size: 'invisible' },
-          firebaseAuth
+          { size: 'invisible' }
         );
         (window as any).voteOtpRecaptchaVerifier = verifier;
       } else {

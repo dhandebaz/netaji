@@ -1,4 +1,5 @@
 import { parseApiError, AppError, ERROR_CODES } from './errorHandler';
+import type { Politician } from '../types';
 
 const API_BASE = '/api';
 
@@ -101,7 +102,18 @@ async function safeApiCall<T = any>(
   }
 }
 
-export const getPoliticians = (params?: { state?: string; party?: string; search?: string; limit?: number; offset?: number; sort?: string; role?: 'elected' | 'candidate'; ids?: number[] }) => {
+export const getPoliticians = (
+  params?: {
+    state?: string;
+    party?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+    sort?: string;
+    role?: 'elected' | 'candidate';
+    ids?: number[];
+  }
+): Promise<Politician[]> => {
   const queryParams = new URLSearchParams();
   if (params?.state) queryParams.set('state', params.state);
   if (params?.party) queryParams.set('party', params.party);
@@ -112,7 +124,7 @@ export const getPoliticians = (params?: { state?: string; party?: string; search
   if (params?.role) queryParams.set('role', params.role);
   if (params?.ids && params.ids.length > 0) queryParams.set('ids', params.ids.join(','));
   const query = queryParams.toString();
-  return apiCall('GET', `/politicians${query ? `?${query}` : ''}`);
+  return apiCall<Politician[]>('GET', `/politicians${query ? `?${query}` : ''}`);
 };
 
 export const getPolitician = (idOrSlug: string | number) => 
@@ -192,7 +204,14 @@ export const getAuditLogs = (token: string, params?: { limit?: number; offset?: 
   return apiCall('GET', `/admin/audit-logs${query ? `?${query}` : ''}`, undefined, token);
 };
 
+export const getSystemAudit = (token: string) =>
+  apiCall('GET', '/admin/system-audit', undefined, token);
+
+export const getSystemSnapshots = (token: string) =>
+  apiCall('GET', '/admin/system-snapshots', undefined, token);
+
 export const getDbStatus = (token: string) => apiCall('GET', '/db/status', undefined, token);
+export const getMonitorStatus = (token: string) => apiCall('GET', '/monitor/status', undefined, token);
 export const testDbConnection = (type: string, connectionString: string, token: string) => 
   apiCall('POST', '/db/test-connection', { type, connectionString }, token);
 
@@ -203,6 +222,15 @@ export const aiAnalyze = (analysisType: string, token: string) =>
   apiCall('POST', '/ai/analyze', { analysisType }, token);
 
 export const healthCheck = () => apiCall('GET', '/health');
+
+export const triggerCronScrape = (token: string, limit?: number) =>
+  apiCall('GET', `/cron/scrape${limit ? `?limit=${limit}` : ''}`, undefined, token);
+
+export const triggerCronAiRefresh = (token: string, limit?: number) =>
+  apiCall('GET', `/cron/ai-refresh${limit ? `?limit=${limit}` : ''}`, undefined, token);
+
+export const triggerCronSync = (token: string) =>
+  apiCall('GET', '/cron/sync', undefined, token);
 
 export const submitSupportTicket = (data: { name: string; email: string; subject: string; message: string }) =>
   apiCall('POST', '/grievances', data);

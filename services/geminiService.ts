@@ -3,7 +3,7 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { PROJECT_CONTEXT } from './projectContext';
 import { Politician, RTITask } from '../types';
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
 const ai = API_KEY ? new GoogleGenAI({ apiKey: API_KEY }) : null;
 
 export const isAIAvailable = (): boolean => {
@@ -12,7 +12,10 @@ export const isAIAvailable = (): boolean => {
 
 export const getAIStatus = (): { available: boolean; message: string } => {
   if (!API_KEY) {
-    return { available: false, message: 'Gemini API key not configured. Add VITE_GEMINI_API_KEY to enable AI features.' };
+    return {
+      available: false,
+      message: 'Gemini API key not configured. Add NEXT_PUBLIC_GEMINI_API_KEY to enable AI features.',
+    };
   }
   return { available: true, message: 'AI features are enabled.' };
 };
@@ -184,7 +187,7 @@ export const generateFeatureCode = async (request: string, onProgress?: (log: st
   `;
 
   if (!ai) {
-    throw new Error("AI not available - please configure VITE_GEMINI_API_KEY");
+    throw new Error("AI not available - please configure NEXT_PUBLIC_GEMINI_API_KEY");
   }
 
   try {
@@ -227,7 +230,7 @@ export const generateFeatureCode = async (request: string, onProgress?: (log: st
 
   } catch (error: any) {
     log(`❌ Generation Failed: ${error.message}`);
-    return fallback();
+    throw error;
   }
 };
 
@@ -237,7 +240,7 @@ export const generateFeatureCode = async (request: string, onProgress?: (log: st
  */
 export const generateComparisonAnalysis = async (politicians: Politician[]): Promise<ComparisonAnalysis> => {
   if (!ai) {
-    throw new Error("AI not available - please configure VITE_GEMINI_API_KEY");
+    throw new Error("AI not available - please configure NEXT_PUBLIC_GEMINI_API_KEY");
   }
   
   const schema: Schema = {
@@ -312,7 +315,7 @@ export const generateComparisonAnalysis = async (politicians: Politician[]): Pro
  */
 export const draftRTIApplication = async (task: RTITask, volunteerName: string, volunteerAddress: string): Promise<string> => {
   if (!ai) {
-    throw new Error("AI not available - please configure VITE_GEMINI_API_KEY");
+    throw new Error("AI not available - please configure NEXT_PUBLIC_GEMINI_API_KEY");
   }
   
   const prompt = `
@@ -342,7 +345,7 @@ export const draftRTIApplication = async (task: RTITask, volunteerName: string, 
     return response.text || "Failed to generate application draft. Please try again.";
   } catch (error) {
     console.error("RTI Drafting Failed:", error);
-    return fallback();
+    return rtiFallback();
   }
 };
 
@@ -351,7 +354,7 @@ export const draftRTIApplication = async (task: RTITask, volunteerName: string, 
  */
 export const generatePoliticianInsights = async (politician: Politician): Promise<PoliticianInsights> => {
     if (!ai) {
-      throw new Error("AI not available - please configure VITE_GEMINI_API_KEY");
+      throw new Error("AI not available - please configure NEXT_PUBLIC_GEMINI_API_KEY");
     }
     
     const schema: Schema = {
@@ -402,7 +405,7 @@ export const generatePoliticianInsights = async (politician: Politician): Promis
         return JSON.parse(response.text) as PoliticianInsights;
     } catch (error) {
         console.error("Insight Generation Failed:", error);
-        return fallback();
+        return politicianInsightsFallback(politician);
     }
 };
 
@@ -437,4 +440,21 @@ export const runNetaAIChat = async (history: ChatMessage[], message: string): Pr
     console.error("Chat error:", error);
     throw error;
   }
+};
+
+const rtiFallback = (): string => {
+  return "AI is currently unavailable. Please draft the RTI application manually using standard RTI format.";
+};
+
+const politicianInsightsFallback = (politician: Politician): PoliticianInsights => {
+  return {
+    biography: `Insights are temporarily unavailable for ${politician.name}.`,
+    ideology: "Insights are temporarily unavailable.",
+    swot: {
+      strengths: [],
+      weaknesses: [],
+      opportunities: [],
+      threats: [],
+    },
+  };
 };

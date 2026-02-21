@@ -1,3 +1,4 @@
+'use client';
 
 import React from 'react';
 import { FileText, Zap, TrendingUp, AlertTriangle, ShieldCheck, Megaphone, CheckCircle, Clock, Heart, Gavel, Link as LinkIcon, BrainCircuit } from 'lucide-react';

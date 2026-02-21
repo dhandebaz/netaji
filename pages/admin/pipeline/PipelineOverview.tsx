@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Globe, Database, Rss, FileText, Check, AlertCircle, ArrowRight, Zap } from 'lucide-react';
+import { RefreshCw, Globe, Database, Rss, FileText, Check, AlertCircle, ArrowRight, Zap, Activity } from 'lucide-react';
 import { fetchRealDataFromBackend } from '../../../services/dataService';
+import { useAuth } from '../../../context/AuthContext';
+import { getMonitorStatus, triggerCronScrape, triggerCronAiRefresh, triggerCronSync } from '../../../services/apiService';
 
 interface Props {
     onNavigate: (page: 'overview' | 'scrapers' | 'rss' | 'logs') => void;
@@ -17,6 +19,16 @@ const PipelineOverview: React.FC<Props> = ({ onNavigate }) => {
   const [scraperMessage, setScraperMessage] = useState('');
   const [selectedState, setSelectedState] = useState('all');
   const [availableStates, setAvailableStates] = useState<Config[]>([]);
+  const { token } = useAuth();
+  const [monitor, setMonitor] = useState<{
+    db: string;
+    pinecone: string;
+    gemini: string;
+    lastScrape: string | null;
+    lastAiRun: string | null;
+    pendingScrapes: number;
+  } | null>(null);
+  const [monitorError, setMonitorError] = useState('');
 
   useEffect(() => {
     setAvailableStates([
@@ -28,6 +40,23 @@ const PipelineOverview: React.FC<Props> = ({ onNavigate }) => {
     ]);
     setSelectedState('all');
   }, []);
+
+  useEffect(() => {
+    const loadMonitor = async () => {
+      if (!token) return;
+      try {
+        const data = await getMonitorStatus(token);
+        setMonitor(data as any);
+        setMonitorError('');
+      } catch {
+        setMonitor(null);
+        setMonitorError('Failed to load monitor status');
+      }
+    };
+    loadMonitor();
+    const interval = setInterval(loadMonitor, 30000);
+    return () => clearInterval(interval);
+  }, [token]);
 
   const handleRunScraper = async () => {
     setIsScraperRunning(true);
@@ -52,6 +81,62 @@ const PipelineOverview: React.FC<Props> = ({ onNavigate }) => {
       setScraperMessage(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsScraperRunning(false);
+    }
+  };
+
+  const handleRunCronScrape = async () => {
+    if (!token) return;
+    setScraperStatus('running');
+    setScraperMessage('Triggering cron scraper batch…');
+    try {
+      const res = await triggerCronScrape(token);
+      const count = (res as any).count ?? 0;
+      setScraperStatus('success');
+      setScraperMessage(`Cron scrape batch completed (${count} items).`);
+      setTimeout(() => {
+        setScraperStatus('idle');
+        setScraperMessage('');
+      }, 5000);
+    } catch {
+      setScraperStatus('error');
+      setScraperMessage('Cron scrape failed. Check logs.');
+    }
+  };
+
+  const handleRunCronAi = async () => {
+    if (!token) return;
+    setScraperStatus('running');
+    setScraperMessage('Triggering AI refresh batch…');
+    try {
+      const res = await triggerCronAiRefresh(token);
+      const count = (res as any).count ?? 0;
+      setScraperStatus('success');
+      setScraperMessage(`AI refresh batch completed (${count} profiles).`);
+      setTimeout(() => {
+        setScraperStatus('idle');
+        setScraperMessage('');
+      }, 5000);
+    } catch {
+      setScraperStatus('error');
+      setScraperMessage('AI refresh failed. Check logs.');
+    }
+  };
+
+  const handleRunCronSync = async () => {
+    if (!token) return;
+    setScraperStatus('running');
+    setScraperMessage('Triggering sync job…');
+    try {
+      await triggerCronSync(token);
+      setScraperStatus('success');
+      setScraperMessage('Sync job completed.');
+      setTimeout(() => {
+        setScraperStatus('idle');
+        setScraperMessage('');
+      }, 5000);
+    } catch {
+      setScraperStatus('error');
+      setScraperMessage('Sync job failed. Check logs.');
     }
   };
 
@@ -91,6 +176,27 @@ const PipelineOverview: React.FC<Props> = ({ onNavigate }) => {
                 <RefreshCw size={20} className={isScraperRunning ? 'animate-spin' : ''} />
                 {isScraperRunning ? 'Scraping...' : 'Run Scraper'}
              </button>
+             <button
+               onClick={handleRunCronScrape}
+               disabled={!token}
+               className="bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 whitespace-nowrap"
+             >
+               <Activity size={16} /> Cron Scrape Batch
+             </button>
+             <button
+               onClick={handleRunCronAi}
+               disabled={!token}
+               className="bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 whitespace-nowrap"
+             >
+               <Activity size={16} /> AI Refresh Batch
+             </button>
+             <button
+               onClick={handleRunCronSync}
+               disabled={!token}
+               className="bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-xs hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 whitespace-nowrap"
+             >
+               <Activity size={16} /> Sync Job
+             </button>
            </div>
          </div>
 
@@ -110,7 +216,7 @@ const PipelineOverview: React.FC<Props> = ({ onNavigate }) => {
        </div>
 
        {/* Quick Status Cards */}
-       <div className="grid md:grid-cols-3 gap-6">
+       <div className="grid md:grid-cols-4 gap-6">
            <div 
                 onClick={() => onNavigate('scrapers')}
                 className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer group"
@@ -150,12 +256,22 @@ const PipelineOverview: React.FC<Props> = ({ onNavigate }) => {
                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
                        <Database size={24} />
                    </div>
-                   <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded">99.9% Uptime</span>
+                   <span className={`text-xs font-bold px-2 py-1 rounded ${monitor?.db === 'ok' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                     {monitor?.db === 'ok' ? 'Healthy' : 'Degraded'}
+                   </span>
                </div>
-               <h3 className="font-bold text-slate-900 text-lg">Data Storage</h3>
-               <p className="text-sm text-slate-500 mt-1">4.2GB / 5.0GB Used</p>
-               <div className="mt-4 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                   <div className="h-full bg-emerald-500 w-[84%]"></div>
+               <h3 className="font-bold text-slate-900 text-lg">Cron & AI Health</h3>
+               <p className="text-sm text-slate-500 mt-1">
+                 {monitorError
+                   ? monitorError
+                   : `Scraper: ${monitor?.lastScrape ? new Date(monitor.lastScrape).toLocaleString() : 'never'} • AI: ${
+                       monitor?.lastAiRun ? new Date(monitor.lastAiRun).toLocaleString() : 'never'
+                     }`}
+               </p>
+               <div className="mt-4 space-y-1 text-xs text-slate-600">
+                 <div>Pending AI profiles: {monitor?.pendingScrapes ?? 0}</div>
+                 <div>Pinecone: {monitor?.pinecone || 'unconfigured'}</div>
+                 <div>Gemini: {monitor?.gemini || 'unconfigured'}</div>
                </div>
            </div>
        </div>
